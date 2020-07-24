@@ -13,6 +13,7 @@ brew install verilator gmp mpfr libmpc
 
 ## Test
 ```
+pip install pytest
 pip install -e .
 pytest tests
 ```
