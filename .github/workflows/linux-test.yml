@@ -21,7 +21,7 @@ jobs:
     - name: Install Python packages
       shell: bash -l {0}
       run: |
-          pip install pytest magma-lang mantle fault
+          pip install -e .
     - name: Pytest
       shell: bash -l {0}
       run: |
