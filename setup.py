@@ -16,7 +16,7 @@ setup(
         "riscv_mini",
     ],
     install_requires=[
-        "magma",
+        "magma-lang",
         "mantle",
         "fault"
     ],
