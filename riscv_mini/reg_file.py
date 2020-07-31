@@ -20,8 +20,7 @@ class RegFile(m.Generator2):
             waddr=m.In(m.UInt[5]),
             wdata=m.In(m.UInt[DATAWIDTH])
         ) + m.ClockIO(has_async_reset=True)
-        # TODO: Add a disable write forwarding parameter for RegFileBuilder
-        regs = RegFileBuilder("reg_file", 32, DATAWIDTH)
+        regs = RegFileBuilder("reg_file", 32, DATAWIDTH, write_forward=False)
         RegMux = m.Mux(2, m.UInt[DATAWIDTH])
         io.rdata1 @= RegMux()(0, regs[io.raddr1], m.reduce(operator.or_,
                                                            io.raddr1))

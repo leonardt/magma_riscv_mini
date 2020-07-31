@@ -1,5 +1,8 @@
 # magma-riscv-mini
-Magma port of https://github.com/ucb-bar/riscv-mini
+magma port of https://github.com/ucb-bar/riscv-mini
+
+Currently WIP, please post any questions on GitHub Issues or feel free to
+contribute!
 
 ## Dependencies
 ### Ubuntu
