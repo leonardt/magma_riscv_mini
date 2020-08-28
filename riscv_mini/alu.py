@@ -18,15 +18,15 @@ class ALUOP(m.Enum):
 
 
 class ALUBase(m.Generator2):
-    def __init__(self, data_width: int):
-        self.io = m.IO(A=m.In(m.UInt[data_width]), B=m.In(m.UInt[data_width]),
-                       op=m.In(ALUOP), out=m.Out(m.UInt[data_width]),
-                       sum_=m.Out(m.UInt[data_width]))
+    def __init__(self, x_len: int):
+        self.io = m.IO(A=m.In(m.UInt[x_len]), B=m.In(m.UInt[x_len]),
+                       op=m.In(ALUOP), out=m.Out(m.UInt[x_len]),
+                       sum_=m.Out(m.UInt[x_len]))
 
 
 class ALUSimple(ALUBase):
-    def __init__(self, data_width: int):
-        super().__init__(data_width)
+    def __init__(self, x_len: int):
+        super().__init__(x_len)
         io = self.io
 
         @m.inline_combinational()
@@ -60,16 +60,16 @@ class ALUSimple(ALUBase):
 
 
 class ALUArea(ALUBase):
-    def __init__(self, data_width: int):
-        super().__init__(data_width)
+    def __init__(self, x_len: int):
+        super().__init__(x_len)
         io = self.io
         sum_ = io.A + m.mux([io.B, -io.B], io.op[0])
         cmp = m.uint(m.mux([m.mux([io.A[-1], io.B[-1]], io.op[1]), sum_[-1]],
                            io.A[-1] == io.B[-1]), 16)
         shin = m.mux([io.A[::-1], io.A], io.op[3])
         shiftr = m.uint(m.sint(
-            m.concat(shin, io.op[0] & shin[data_width - 1])
-        ) >> m.zext(io.B, 1))[:data_width]
+            m.concat(shin, io.op[0] & shin[x_len - 1])
+        ) >> m.zext(io.B, 1))[:x_len]
         shiftl = shiftr[::-1]
 
         @m.inline_combinational()

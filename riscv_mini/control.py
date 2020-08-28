@@ -1,0 +1,233 @@
+from hwtypes import BitVector as BV
+import magma as m
+
+from riscv_mini.instructions import (LB, LH, LW, LBU, LHU, SB, SH, SW, SLL,
+                                     SLLI, SRL, SRLI, SRA, SRAI, ADD, ADDI,
+                                     SUB, LUI, AUIPC, XOR, XORI, OR, ORI, AND,
+                                     ANDI, SLT, SLTI, SLTU, SLTIU, BEQ, BNE,
+                                     BLT, BGE, BLTU, BGEU, JAL, JALR, FENCE,
+                                     FENCEI, CSRRW, CSRRS, CSRRC, CSRRWI,
+                                     CSRRSI, CSRRCI, ECALL, EBREAK, ERET, WFI,
+                                     NOP)
+from riscv_mini.alu import ALUOP
+
+ALU_ADD = ALUOP.ADD
+ALU_SUB = ALUOP.SUB
+ALU_AND = ALUOP.AND
+ALU_OR = ALUOP.OR
+ALU_XOR = ALUOP.XOR
+ALU_SLT = ALUOP.SLT
+ALU_SLL = ALUOP.SLL
+ALU_SLTU = ALUOP.SLTU
+ALU_SRL = ALUOP.SRL
+ALU_SRA = ALUOP.SRA
+ALU_COPY_A = ALUOP.COPY_A
+ALU_COPY_B = ALUOP.COPY_B
+ALU_XXX = ALUOP.XXX
+
+Y = True
+N = False
+
+# pc_sel
+PC_4 = BV[2](0)
+PC_ALU = BV[2](1)
+PC_0 = BV[2](2)
+PC_EPC = BV[2](3)
+
+# A_sel
+A_XXX = BV[1](0)
+A_PC = BV[1](0)
+A_RS1 = BV[1](1)
+
+# B_sel
+B_XXX = BV[1](0)
+B_IMM = BV[1](0)
+B_RS2 = BV[1](1)
+
+# imm_sel
+IMM_X = BV[3](0)
+IMM_I = BV[3](1)
+IMM_S = BV[3](2)
+IMM_U = BV[3](3)
+IMM_J = BV[3](4)
+IMM_B = BV[3](5)
+IMM_Z = BV[3](6)
+
+# br_type
+BR_XXX = BV[3](0)
+BR_LTU = BV[3](1)
+BR_LT = BV[3](2)
+BR_EQ = BV[3](3)
+BR_GEU = BV[3](4)
+BR_GE = BV[3](5)
+BR_NE = BV[3](6)
+
+# st_type
+ST_XXX = BV[2](0)
+ST_SW = BV[2](1)
+ST_SH = BV[2](2)
+ST_SB = BV[2](3)
+
+# ld_type
+LD_XXX = BV[3](0)
+LD_LW = BV[3](1)
+LD_LH = BV[3](2)
+LD_LB = BV[3](3)
+LD_LHU = BV[3](4)
+LD_LBU = BV[3](5)
+
+# wb_sel
+WB_ALU = BV[2](0)
+WB_MEM = BV[2](1)
+WB_PC4 = BV[2](2)
+WB_CSR = BV[2](3)
+
+
+def make_ControlIO(x_len):
+    return m.IO(
+        inst=m.In(m.UInt[x_len]),
+        pc_sel=m.Out(m.UInt[2]),
+        inst_kill=m.Out(m.Bit),
+        A_sel=m.Out(m.UInt[1]),
+        B_sel=m.Out(m.UInt[1]),
+        imm_sel=m.Out(m.UInt[3]),
+        alu_op=m.Out(m.UInt[4]),
+        br_type=m.Out(m.UInt[3]),
+        st_type=m.Out(m.UInt[2]),
+        ld_type=m.Out(m.UInt[3]),
+        wb_sel=m.Out(m.UInt[2]),
+        wb_en=m.Out(m.Bit),
+        csr_cmd=m.Out(m.UInt[3]),
+        illegal=m.Out(m.Bit)
+    )
+
+
+class Control(m.Generator2):
+    def __init__(self, x_len):
+        io = make_ControlIO(x_len)
+        inst = io.inst
+
+        @m.inline_combinational()
+        def control():
+            #                                                                   kill                        wb_en  illegal?
+            #                   pc_sel  A_sel   B_sel  imm_sel   alu_op   br_type |  st_type ld_type wb_sel  | csr_cmd |
+            #                     |       |       |     |          |          |   |     |       |       |    |  |      |
+            if io.inst == LUI:
+                ctrl_signals = [PC_4  , A_PC,   B_IMM, IMM_U, ALU_COPY_B, BR_XXX, N, ST_XXX, LD_XXX, WB_ALU, Y, CSR.N, N]
+            elif inst == AUIPC:
+                ctrl_signals = [PC_4  , A_PC,   B_IMM, IMM_U, ALU_ADD   , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU, Y, CSR.N, N]
+            elif inst == JAL:
+                ctrl_signals = [PC_ALU, A_PC,   B_IMM, IMM_J, ALU_ADD   , BR_XXX, Y, ST_XXX, LD_XXX, WB_PC4, Y, CSR.N, N]
+            elif inst == JALR:
+                ctrl_signals = [PC_ALU, A_RS1,  B_IMM, IMM_I, ALU_ADD   , BR_XXX, Y, ST_XXX, LD_XXX, WB_PC4, Y, CSR.N, N]
+            elif inst == BEQ:
+                ctrl_signals = [PC_4  , A_PC,   B_IMM, IMM_B, ALU_ADD   , BR_EQ , N, ST_XXX, LD_XXX, WB_ALU, N, CSR.N, N]
+            elif inst == BNE:
+                ctrl_signals = [PC_4  , A_PC,   B_IMM, IMM_B, ALU_ADD   , BR_NE , N, ST_XXX, LD_XXX, WB_ALU, N, CSR.N, N]
+            elif inst == BLT:
+                ctrl_signals = [PC_4  , A_PC,   B_IMM, IMM_B, ALU_ADD   , BR_LT , N, ST_XXX, LD_XXX, WB_ALU, N, CSR.N, N]
+            elif inst == BGE:
+                ctrl_signals = [PC_4  , A_PC,   B_IMM, IMM_B, ALU_ADD   , BR_GE , N, ST_XXX, LD_XXX, WB_ALU, N, CSR.N, N]
+            elif inst == BLTU:
+                ctrl_signals = [PC_4  , A_PC,   B_IMM, IMM_B, ALU_ADD   , BR_LTU, N, ST_XXX, LD_XXX, WB_ALU, N, CSR.N, N]
+            elif inst == BGEU:
+                ctrl_signals = [PC_4  , A_PC,   B_IMM, IMM_B, ALU_ADD   , BR_GEU, N, ST_XXX, LD_XXX, WB_ALU, N, CSR.N, N]
+            elif inst == LB:
+                ctrl_signals = [PC_0  , A_RS1,  B_IMM, IMM_I, ALU_ADD   , BR_XXX, Y, ST_XXX, LD_LB , WB_MEM, Y, CSR.N, N]
+            elif inst == LH:
+                ctrl_signals = [PC_0  , A_RS1,  B_IMM, IMM_I, ALU_ADD   , BR_XXX, Y, ST_XXX, LD_LH , WB_MEM, Y, CSR.N, N]
+            elif inst == LW:
+                ctrl_signals = [PC_0  , A_RS1,  B_IMM, IMM_I, ALU_ADD   , BR_XXX, Y, ST_XXX, LD_LW , WB_MEM, Y, CSR.N, N]
+            elif inst == LBU:
+                ctrl_signals = [PC_0  , A_RS1,  B_IMM, IMM_I, ALU_ADD   , BR_XXX, Y, ST_XXX, LD_LBU, WB_MEM, Y, CSR.N, N]
+            elif inst == LHU:
+                ctrl_signals = [PC_0  , A_RS1,  B_IMM, IMM_I, ALU_ADD   , BR_XXX, Y, ST_XXX, LD_LHU, WB_MEM, Y, CSR.N, N]
+            elif inst == SB:
+                ctrl_signals = [PC_4  , A_RS1,  B_IMM, IMM_S, ALU_ADD   , BR_XXX, N, ST_SB , LD_XXX, WB_ALU, N, CSR.N, N]
+            elif inst == SH:
+                ctrl_signals = [PC_4  , A_RS1,  B_IMM, IMM_S, ALU_ADD   , BR_XXX, N, ST_SH , LD_XXX, WB_ALU, N, CSR.N, N]
+            elif inst == SW:
+                ctrl_signals = [PC_4  , A_RS1,  B_IMM, IMM_S, ALU_ADD   , BR_XXX, N, ST_SW , LD_XXX, WB_ALU, N, CSR.N, N]
+            elif inst == ADDI:
+                ctrl_signals = [PC_4  , A_RS1,  B_IMM, IMM_I, ALU_ADD   , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU, Y, CSR.N, N]
+            elif inst == SLTI:
+                ctrl_signals = [PC_4  , A_RS1,  B_IMM, IMM_I, ALU_SLT   , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU, Y, CSR.N, N]
+            elif inst == SLTIU:
+                ctrl_signals = [PC_4  , A_RS1,  B_IMM, IMM_I, ALU_SLTU  , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU, Y, CSR.N, N]
+            elif inst == XORI:
+                ctrl_signals = [PC_4  , A_RS1,  B_IMM, IMM_I, ALU_XOR   , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU, Y, CSR.N, N]
+            elif inst == ORI:
+                ctrl_signals = [PC_4  , A_RS1,  B_IMM, IMM_I, ALU_OR    , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU, Y, CSR.N, N]
+            elif inst == ANDI:
+                ctrl_signals = [PC_4  , A_RS1,  B_IMM, IMM_I, ALU_AND   , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU, Y, CSR.N, N]
+            elif inst == SLLI:
+                ctrl_signals = [PC_4  , A_RS1,  B_IMM, IMM_I, ALU_SLL   , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU, Y, CSR.N, N]
+            elif inst == SRLI:
+                ctrl_signals = [PC_4  , A_RS1,  B_IMM, IMM_I, ALU_SRL   , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU, Y, CSR.N, N]
+            elif inst == SRAI:
+                ctrl_signals = [PC_4  , A_RS1,  B_IMM, IMM_I, ALU_SRA   , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU, Y, CSR.N, N]
+            elif inst == ADD:
+                ctrl_signals = [PC_4  , A_RS1,  B_RS2, IMM_X, ALU_ADD   , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU, Y, CSR.N, N]
+            elif inst == SUB:
+                ctrl_signals = [PC_4  , A_RS1,  B_RS2, IMM_X, ALU_SUB   , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU, Y, CSR.N, N]
+            elif inst == SLL:
+                ctrl_signals = [PC_4  , A_RS1,  B_RS2, IMM_X, ALU_SLL   , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU, Y, CSR.N, N]
+            elif inst == SLT:
+                ctrl_signals = [PC_4  , A_RS1,  B_RS2, IMM_X, ALU_SLT   , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU, Y, CSR.N, N]
+            elif inst == SLTU:
+                ctrl_signals = [PC_4  , A_RS1,  B_RS2, IMM_X, ALU_SLTU  , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU, Y, CSR.N, N]
+            elif inst == XOR:
+                ctrl_signals = [PC_4  , A_RS1,  B_RS2, IMM_X, ALU_XOR   , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU, Y, CSR.N, N]
+            elif inst == SRL:
+                ctrl_signals = [PC_4  , A_RS1,  B_RS2, IMM_X, ALU_SRL   , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU, Y, CSR.N, N]
+            elif inst == SRA:
+                ctrl_signals = [PC_4  , A_RS1,  B_RS2, IMM_X, ALU_SRA   , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU, Y, CSR.N, N]
+            elif inst == OR:
+                ctrl_signals = [PC_4  , A_RS1,  B_RS2, IMM_X, ALU_OR    , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU, Y, CSR.N, N]
+            elif inst == AND:
+                ctrl_signals = [PC_4  , A_RS1,  B_RS2, IMM_X, ALU_AND   , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU, Y, CSR.N, N]
+            elif inst == FENCE:
+                ctrl_signals = [PC_4  , A_XXX,  B_XXX, IMM_X, ALU_XXX   , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU, N, CSR.N, N]
+            elif inst == FENCEI:
+                ctrl_signals = [PC_0  , A_XXX,  B_XXX, IMM_X, ALU_XXX   , BR_XXX, Y, ST_XXX, LD_XXX, WB_ALU, N, CSR.N, N]
+            elif inst == CSRRW:
+                ctrl_signals = [PC_0  , A_RS1,  B_XXX, IMM_X, ALU_COPY_A, BR_XXX, Y, ST_XXX, LD_XXX, WB_CSR, Y, CSR.W, N]
+            elif inst == CSRRS:
+                ctrl_signals = [PC_0  , A_RS1,  B_XXX, IMM_X, ALU_COPY_A, BR_XXX, Y, ST_XXX, LD_XXX, WB_CSR, Y, CSR.S, N]
+            elif inst == CSRRC:
+                ctrl_signals = [PC_0  , A_RS1,  B_XXX, IMM_X, ALU_COPY_A, BR_XXX, Y, ST_XXX, LD_XXX, WB_CSR, Y, CSR.C, N]
+            elif inst == CSRRWI:
+                ctrl_signals = [PC_0  , A_XXX,  B_XXX, IMM_Z, ALU_XXX   , BR_XXX, Y, ST_XXX, LD_XXX, WB_CSR, Y, CSR.W, N]
+            elif inst == CSRRSI:
+                ctrl_signals = [PC_0  , A_XXX,  B_XXX, IMM_Z, ALU_XXX   , BR_XXX, Y, ST_XXX, LD_XXX, WB_CSR, Y, CSR.S, N]
+            elif inst == CSRRCI:
+                ctrl_signals = [PC_0  , A_XXX,  B_XXX, IMM_Z, ALU_XXX   , BR_XXX, Y, ST_XXX, LD_XXX, WB_CSR, Y, CSR.C, N]
+            elif inst == ECALL:
+                ctrl_signals = [PC_4  , A_XXX,  B_XXX, IMM_X, ALU_XXX   , BR_XXX, N, ST_XXX, LD_XXX, WB_CSR, N, CSR.P, N]
+            elif inst == EBREAK:
+                ctrl_signals = [PC_4  , A_XXX,  B_XXX, IMM_X, ALU_XXX   , BR_XXX, N, ST_XXX, LD_XXX, WB_CSR, N, CSR.P, N]
+            elif inst == ERET:
+                ctrl_signals = [PC_EPC, A_XXX,  B_XXX, IMM_X, ALU_XXX   , BR_XXX, Y, ST_XXX, LD_XXX, WB_CSR, N, CSR.P, N]
+            elif inst == WFI:    
+                ctrl_signals = [PC_4  , A_XXX,  B_XXX, IMM_X, ALU_XXX   , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU, N, CSR.N, N]
+            else:
+                ctrl_signals = [PC_4,   A_XXX,  B_XXX, IMM_X, ALU_XXX   , BR_XXX, N, ST_XXX, LD_XXX, WB_ALU, N, CSR.N, Y]
+
+        # Control signals for Fetch
+        io.pc_sel    @= ctrl_signals[0]
+        io.inst_kill @= ctrl_signals[6][0]
+  
+        # Control signals for Execute
+        io.A_sel   @= ctrl_signals[1]
+        io.B_sel   @= ctrl_signals[2]
+        io.imm_sel @= ctrl_signals[3]
+        io.alu_op  @= ctrl_signals[4]
+        io.br_type @= ctrl_signals[5]
+        io.st_type @= ctrl_signals[7]
+  
+        # Control signals for Write Back
+        io.ld_type @= ctrl_signals[8]
+        io.wb_sel  @= ctrl_signals[9]
+        io.wb_en   @= ctrl_signals[10][0]
+        io.csr_cmd @= ctrl_signals[11]
+        io.illegal @= ctrl_signals[12]
