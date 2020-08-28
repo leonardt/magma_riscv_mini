@@ -22,6 +22,7 @@ jobs:
       shell: bash -l {0}
       run: |
           pip install pytest
+          pip install -e git://github.com/phanrahan/magma.git@bit-pattern#egg=magma-lang
           pip install -e .
     - name: Pytest
       shell: bash -l {0}
