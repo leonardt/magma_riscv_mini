@@ -21,9 +21,9 @@ jobs:
     - name: Install Python packages
       shell: bash -l {0}
       run: |
-          pip install pytest
+          pip install pytest pytest-pycodestyle
           pip install -e .
     - name: Pytest
       shell: bash -l {0}
       run: |
-        pytest tests/
+        pytest --pycodestyle tests/
