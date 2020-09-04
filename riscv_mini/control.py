@@ -163,7 +163,7 @@ inst_map = {
 
 class Control(m.Generator2):
     def __init__(self, x_len):
-        io = make_ControlIO(x_len)
+        self.io = io = make_ControlIO(x_len)
 
         ctrl_signals = default
         for inst, signals in reversed(inst_map.items()):
