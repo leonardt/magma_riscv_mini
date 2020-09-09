@@ -166,7 +166,7 @@ class Control(m.Generator2):
         self.io = io = make_ControlIO(x_len)
 
         ctrl_signals = default
-        for inst, signals in reversed(inst_map.items()):
+        for inst, signals in reversed(tuple(inst_map.items())):
             ctrl_signals = m.mux([ctrl_signals, signals], io.inst == inst)
 
         # Control signals for Fetch
