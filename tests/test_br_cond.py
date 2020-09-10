@@ -77,4 +77,5 @@ def test_br_cond(BrCond):
     tester.wait_until_high(tester.circuit.done)
     tester.assert_(tester.circuit.taken == tester.circuit.out)
     tester.compile_and_run("verilator", magma_opts={"verilator_compat": True,
-                                                    "inline": True, "terminate_unused": True})
+                                                    "inline": True,
+                                                    "terminate_unused": True})
