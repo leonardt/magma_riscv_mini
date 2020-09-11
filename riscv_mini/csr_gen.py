@@ -1,6 +1,5 @@
 import operator
 import magma as m
-m.config.set_debug_mode(True)
 
 from hwtypes import Bit
 from hwtypes import BitVector as BV
