@@ -9,6 +9,7 @@ import riscv_mini.instructions as Instructions
 import riscv_mini.control as Control
 from riscv_mini.data_path import Const
 
+
 def concat(*args):
     x = args[0]
     if isinstance(x, Bit):
