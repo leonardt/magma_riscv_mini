@@ -163,9 +163,9 @@ class CSRGen(m.Generator2):
         is_E_ret = priv_inst & ~csr_addr[0] & csr_addr[8]
         csr_valid = m.reduce(operator.or_, m.bits([csr_addr == key
                                                    for key in csr_file]))
-        csr_RO = (m.reduce(operator.and_, csr_addr[10:12]) |
+        csr_RO = (csr_addr[10:12].reduce_and() |
                   (csr_addr == CSR.mtvec) | (csr_addr == CSR.mtdeleg))
-        wen = (io.cmd == CSR.W) | io.cmd[1] & m.reduce(operator.or_, rs1_addr)
+        wen = (io.cmd == CSR.W) | io.cmd[1] & rs1_addr.reduce_or()
         wdata_dict = {
             CSR.W: io.I,
             CSR.S: out | io.I,
@@ -178,7 +178,7 @@ class CSRGen(m.Generator2):
         iaddr_invalid = io.pc_check & io.addr[1]
 
         laddr_dict = {
-            Control.LD_LW: m.reduce(operator.or_, io.addr[0:1]),
+            Control.LD_LW: io.addr[0:1].reduce_or(),
             Control.LD_LH: io.addr[0],
             Control.LD_LHU: io.addr[0]
         }
@@ -187,7 +187,7 @@ class CSRGen(m.Generator2):
             laddr_invalid = m.mux([laddr_invalid, value], io.ld_type == key)
 
         saddr_dict = {
-            Control.ST_SW: m.reduce(operator.or_, io.addr[0:1]),
+            Control.ST_SW: io.addr[0:1].reduce_or(),
             Control.ST_SH: io.addr[0]
         }
         saddr_invalid = False
@@ -195,7 +195,7 @@ class CSRGen(m.Generator2):
             saddr_invalid = m.mux([saddr_invalid, value], io.st_type == key)
 
         expt = (io.illegal | iaddr_invalid | laddr_invalid | saddr_invalid |
-                m.reduce(operator.or_, io.cmd[0:1]) &
+                io.cmd[0:1].reduce_or() &
                 (~csr_valid | ~priv_valid) | wen & csr_RO |
                 (priv_inst & ~priv_valid) | is_E_call | is_E_break)
         io.expt @= expt
@@ -211,18 +211,18 @@ class CSRGen(m.Generator2):
             # Counters
             time.I @= time.O + 1
             timeh.I @= timeh.O
-            if m.reduce(operator.and_, time.O):
+            if time.O.reduce_and():
                 timeh.I @= timeh.O + 1
 
             cycle.I @= cycle.O + 1
             cycleh.I @= cycleh.O
-            if m.reduce(operator.and_, cycle.O):
+            if cycle.O.reduce_and():
                 cycleh.I @= cycleh.O + 1
             instret.I @= instret.O
             if is_inst_ret:
                 instret.I @= instret.O + 1
             instreth.I @= instreth.O
-            if is_inst_ret & m.reduce(operator.and_, instret.O):
+            if is_inst_ret & instret.O.reduce_and():
                 instreth.I @= instreth.O + 1
 
             mbadaddr.I @= mbadaddr.O

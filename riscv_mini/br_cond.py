@@ -40,7 +40,7 @@ class BrCondArea(BrCond):
         super().__init__(x_len)
         io = self.io
         diff = io.rs1 - io.rs2
-        neq = m.reduce(operator.or_, diff)
+        neq = diff.reduce_or()
         eq = ~neq
         is_same_sign = io.rs1[-1] == io.rs2[-1]
         lt = m.mux([io.rs1[-1], diff[-1]], is_same_sign)
