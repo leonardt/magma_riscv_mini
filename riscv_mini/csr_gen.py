@@ -10,17 +10,10 @@ import riscv_mini.control as Control
 from riscv_mini.data_path import Const
 
 
-def Valid(T):
-    return m.Product.from_fields(f"Valid[{T}]", {
-        "bits": T,
-        "valid": m.Bit
-    })
-
-
 def HostIO(x_len):
     return m.IO(
         host=m.Product.from_fields("HostIO", {
-            "fromhost": m.In(Valid(m.UInt[x_len])),
+            "fromhost": m.In(m.Valid[m.UInt[x_len]]),
             "tohost": m.Out(m.UInt[x_len])
         })
     )
@@ -248,7 +241,7 @@ class CSRGen(m.Generator2):
             mtohost.I @= mtohost.O
             mfromhost.I @= mfromhost.O
             if io.host.fromhost.valid:
-                mfromhost.I @= io.host.fromhost.bits
+                mfromhost.I @= io.host.fromhost.data
 
             if ~io.stall:
                 if expt:
