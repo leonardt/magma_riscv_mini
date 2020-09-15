@@ -151,9 +151,7 @@ class CSRGen(m.Generator2):
             CSR.mfromhost: mfromhost.O,
             CSR.mstatus: mstatus,
         }
-        out = m.bits(0, x_len)
-        for key, value in reversed(list(csr_file.items())):
-            out = m.mux([out, value], csr_addr == key)
+        out = m.dict_lookup(csr_file, csr_addr)
         io.O @= out
 
         priv_valid = csr_addr[8:10] <= PRV.O
@@ -171,9 +169,7 @@ class CSRGen(m.Generator2):
             CSR.S: out | io.I,
             CSR.C: out & ~io.I
         }
-        wdata = m.uint(0, x_len)
-        for key, value in reversed(list(wdata_dict.items())):
-            wdata = m.mux([wdata, value], io.cmd == key)
+        wdata = m.dict_lookup(wdata_dict, io.cmd)
 
         iaddr_invalid = io.pc_check & io.addr[1]
 
@@ -182,17 +178,13 @@ class CSRGen(m.Generator2):
             Control.LD_LH: io.addr[0],
             Control.LD_LHU: io.addr[0]
         }
-        laddr_invalid = False
-        for key, value in reversed(list(laddr_dict.items())):
-            laddr_invalid = m.mux([laddr_invalid, value], io.ld_type == key)
+        laddr_invalid = m.dict_lookup(laddr_dict, io.ld_type)
 
         saddr_dict = {
             Control.ST_SW: io.addr[0:1].reduce_or(),
             Control.ST_SH: io.addr[0]
         }
-        saddr_invalid = False
-        for key, value in reversed(list(saddr_dict.items())):
-            saddr_invalid = m.mux([saddr_invalid, value], io.st_type == key)
+        saddr_invalid = m.dict_lookup(saddr_dict, io.st_type)
 
         expt = (io.illegal | iaddr_invalid | laddr_invalid | saddr_invalid |
                 io.cmd[0:1].reduce_or() &
