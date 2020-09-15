@@ -1,4 +1,3 @@
-import magma as m
 from hwtypes import BitVector as BV
 
 
