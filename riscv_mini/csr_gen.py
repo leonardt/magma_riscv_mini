@@ -195,9 +195,6 @@ class CSRGen(m.Generator2):
         io.evec @= mtvec + m.zext_to(PRV.O << 6, x_len)
         io.epc @= mepc.O
 
-        is_inst_ret = ((io.inst != Instructions.NOP) &
-                       (~expt | is_E_call | is_E_break) & ~io.stall)
-
         @m.inline_combinational()
         def logic():
             # Counters
@@ -211,6 +208,8 @@ class CSRGen(m.Generator2):
             if cycle.O.reduce_and():
                 cycleh.I @= cycleh.O + 1
             instret.I @= instret.O
+            is_inst_ret = ((io.inst != Instructions.NOP) &
+                           (~expt | is_E_call | is_E_break) & ~io.stall)
             if is_inst_ret:
                 instret.I @= instret.O + 1
             instreth.I @= instreth.O
