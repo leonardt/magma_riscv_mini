@@ -1,4 +1,4 @@
-# magma-riscv-mini
+# magma_riscv_mini
 ![Linux Test](https://github.com/leonardt/magma_riscv_mini/workflows/Linux%20Test/badge.svg)
 
 magma port of https://github.com/ucb-bar/riscv-mini
