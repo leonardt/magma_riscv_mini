@@ -164,27 +164,24 @@ class CSRGen(m.Generator2):
         csr_RO = (csr_addr[10:12].reduce_and() |
                   (csr_addr == CSR.mtvec) | (csr_addr == CSR.mtdeleg))
         wen = (io.cmd == CSR.W) | io.cmd[1] & rs1_addr.reduce_or()
-        wdata_dict = {
+        wdata = m.dict_lookup({
             CSR.W: io.I,
             CSR.S: out | io.I,
             CSR.C: out & ~io.I
-        }
-        wdata = m.dict_lookup(wdata_dict, io.cmd)
+        }, io.cmd)
 
         iaddr_invalid = io.pc_check & io.addr[1]
 
-        laddr_dict = {
+        laddr_invalid = m.dict_lookup({
             Control.LD_LW: io.addr[0:1].reduce_or(),
             Control.LD_LH: io.addr[0],
             Control.LD_LHU: io.addr[0]
-        }
-        laddr_invalid = m.dict_lookup(laddr_dict, io.ld_type)
+        }, io.ld_type)
 
-        saddr_dict = {
+        saddr_invalid = m.dict_lookup({
             Control.ST_SW: io.addr[0:1].reduce_or(),
             Control.ST_SH: io.addr[0]
-        }
-        saddr_invalid = m.dict_lookup(saddr_dict, io.st_type)
+        }, io.st_type)
 
         expt = (io.illegal | iaddr_invalid | laddr_invalid | saddr_invalid |
                 io.cmd[0:1].reduce_or() &
