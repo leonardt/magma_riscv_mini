@@ -22,12 +22,12 @@ def HostIO(x_len):
 class CSRGen(m.Generator2):
     def __init__(self, x_len):
         class Cause:
-            InstAddrMisaligned = m.UInt[x_len](0x0)
-            IllegalInst = m.UInt[x_len](0x2)
-            Breakpoint = m.UInt[x_len](0x3)
-            LoadAddrMisaligned = m.UInt[x_len](0x4)
-            StoreAddrMisaligned = m.UInt[x_len](0x6)
-            Ecall = m.UInt[x_len](0x8)
+            InstAddrMisaligned = BV[x_len](0x0)
+            IllegalInst = BV[x_len](0x2)
+            Breakpoint = BV[x_len](0x3)
+            LoadAddrMisaligned = BV[x_len](0x4)
+            StoreAddrMisaligned = BV[x_len](0x6)
+            Ecall = BV[x_len](0x8)
 
         self.io = io = m.IO(
             stall=m.In(m.Bit),
