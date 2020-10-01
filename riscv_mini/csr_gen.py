@@ -19,15 +19,20 @@ def HostIO(x_len):
     )
 
 
+def make_Cause(x_len):
+    class Cause:
+        InstAddrMisaligned = BV[x_len](0x0)
+        IllegalInst = BV[x_len](0x2)
+        Breakpoint = BV[x_len](0x3)
+        LoadAddrMisaligned = BV[x_len](0x4)
+        StoreAddrMisaligned = BV[x_len](0x6)
+        Ecall = BV[x_len](0x8)
+    return Cause
+
+
 class CSRGen(m.Generator2):
     def __init__(self, x_len):
-        class Cause:
-            InstAddrMisaligned = BV[x_len](0x0)
-            IllegalInst = BV[x_len](0x2)
-            Breakpoint = BV[x_len](0x3)
-            LoadAddrMisaligned = BV[x_len](0x4)
-            StoreAddrMisaligned = BV[x_len](0x6)
-            Ecall = BV[x_len](0x8)
+        Cause = make_Cause(x_len)
 
         self.io = io = m.IO(
             stall=m.In(m.Bit),
@@ -45,18 +50,18 @@ class CSRGen(m.Generator2):
             expt=m.Out(m.Bit),
             evec=m.Out(m.UInt[x_len]),
             epc=m.Out(m.UInt[x_len])
-        ) + HostIO(x_len) + m.ClockIO()
+        ) + HostIO(x_len) + m.ClockIO(has_resetn=True)
 
         csr_addr = io.inst[20:32]
         rs1_addr = io.inst[15:20]
 
         # user counters
-        time = m.Register(m.UInt[x_len])()
-        timeh = m.Register(m.UInt[x_len])()
-        cycle = m.Register(m.UInt[x_len])()
-        cycleh = m.Register(m.UInt[x_len])()
-        instret = m.Register(m.UInt[x_len])()
-        instreth = m.Register(m.UInt[x_len])()
+        time = m.Register(m.UInt[x_len], reset_type=m.ResetN)()
+        timeh = m.Register(m.UInt[x_len], reset_type=m.ResetN)()
+        cycle = m.Register(m.UInt[x_len], reset_type=m.ResetN)()
+        cycleh = m.Register(m.UInt[x_len], reset_type=m.ResetN)()
+        instret = m.Register(m.UInt[x_len], reset_type=m.ResetN)()
+        instreth = m.Register(m.UInt[x_len], reset_type=m.ResetN)()
 
         mcpuid = m.concat(BV[2](0),  # RV32I
                           BV[x_len - 28](0),
@@ -66,12 +71,12 @@ class CSRGen(m.Generator2):
         mhartid = BV[x_len](0)
 
         # interrupt enable stack
-        PRV = m.Register(m.UInt[len(CSR.PRV_M)], init=CSR.PRV_M)()
-        PRV1 = m.Register(m.UInt[len(CSR.PRV_M)], init=CSR.PRV_M)()
+        PRV = m.Register(m.UInt[len(CSR.PRV_M)], init=CSR.PRV_M, reset_type=m.ResetN)()
+        PRV1 = m.Register(m.UInt[len(CSR.PRV_M)], init=CSR.PRV_M, reset_type=m.ResetN)()
         PRV2 = BV[2](0)
         PRV3 = BV[2](0)
-        IE = m.Register(m.Bit, init=False)()
-        IE1 = m.Register(m.Bit, init=False)()
+        IE = m.Register(m.Bit, init=False, reset_type=m.ResetN)()
+        IE1 = m.Register(m.Bit, init=False, reset_type=m.ResetN)()
         IE2 = False
         IE3 = False
 
@@ -91,16 +96,16 @@ class CSRGen(m.Generator2):
         mtdeleg = BV[x_len](0)
 
         # interrupt registers
-        MTIP = m.Register(m.Bit, init=False)()
+        MTIP = m.Register(m.Bit, init=False, reset_type=m.ResetN)()
         HTIP = False
         STIP = False
-        MTIE = m.Register(m.Bit, init=False)()
+        MTIE = m.Register(m.Bit, init=False, reset_type=m.ResetN)()
         HTIE = False
         STIE = False
-        MSIP = m.Register(m.Bit, init=False)()
+        MSIP = m.Register(m.Bit, init=False, reset_type=m.ResetN)()
         HSIP = False
         SSIP = False
-        MSIE = m.Register(m.Bit, init=False)()
+        MSIE = m.Register(m.Bit, init=False, reset_type=m.ResetN)()
         HSIE = False
         SSIE = False
 
@@ -109,15 +114,15 @@ class CSRGen(m.Generator2):
         mie = m.concat(BV[x_len - 8](0), MTIE.O, HTIE, STIE, Bit(False),
                        MSIE.O, HSIE, SSIE, Bit(False))
 
-        mtimecmp = m.Register(m.UInt[x_len])()
-        mscratch = m.Register(m.UInt[x_len])()
+        mtimecmp = m.Register(m.UInt[x_len], reset_type=m.ResetN)()
+        mscratch = m.Register(m.UInt[x_len], reset_type=m.ResetN)()
 
-        mepc = m.Register(m.UInt[x_len])()
-        mcause = m.Register(m.UInt[x_len])()
-        mbadaddr = m.Register(m.UInt[x_len])()
+        mepc = m.Register(m.UInt[x_len], reset_type=m.ResetN)()
+        mcause = m.Register(m.UInt[x_len], reset_type=m.ResetN)()
+        mbadaddr = m.Register(m.UInt[x_len], reset_type=m.ResetN)()
 
-        mtohost = m.Register(m.UInt[x_len])()
-        mfromhost = m.Register(m.UInt[x_len])()
+        mtohost = m.Register(m.UInt[x_len], reset_type=m.ResetN)()
+        mfromhost = m.Register(m.UInt[x_len], reset_type=m.ResetN)()
 
         io.host.tohost @= mtohost.O
         csr_file = {
@@ -189,7 +194,7 @@ class CSRGen(m.Generator2):
                 (priv_inst & ~priv_valid) | is_E_call | is_E_break)
         io.expt @= expt
 
-        io.evec @= mtvec + m.zext_to(PRV.O << 6, x_len)
+        io.evec @= mtvec + (m.zext_to(PRV.O, x_len) << 6)
         io.epc @= mepc.O
 
         @m.inline_combinational()
