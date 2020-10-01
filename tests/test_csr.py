@@ -298,7 +298,8 @@ def test_csr():
         epc = regs[CSR.mepc].O
         evec = regs[CSR.mtvec].O + (prv << 6)
 
-        # m.display("regs[CSR.mtvec]=%x", regs[CSR.mtvec].O).when(m.posedge(io.CLK))
+        # m.display("regs[CSR.mtvec]=%x", regs[CSR.mtvec].O)\
+        #    .when(m.posedge(io.CLK))
         # m.display("csr.O=%x, rdata=%x", csr.O, rdata).when(m.posedge(io.CLK))
         # m.display("csr.epc=%x, epc=%x", csr.epc, epc).when(m.posedge(io.CLK))
         # m.display("csr.evec=%x, evec=%x", csr.evec, evec)\
