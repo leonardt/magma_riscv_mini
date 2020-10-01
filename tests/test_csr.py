@@ -73,7 +73,7 @@ def test_csr():
     addr = [BV.random(x_len) for _ in range(n)]
     data = [BV.random(x_len) for _ in range(n)]
 
-    class DUT(m.Circuit):
+    class CSR_DUT(m.Circuit):
         io = m.IO(failed=m.Out(m.Bit), done=m.Out(m.Bit))
         io += m.ClockIO(has_resetn=True)
 
@@ -316,7 +316,7 @@ def test_csr():
             if not reg.I.driven():
                 reg.I @= reg.O
 
-    tester = fault.Tester(DUT, DUT.CLK)
+    tester = fault.Tester(CSR_DUT, CSR_DUT.CLK)
     tester.circuit.RESETN = 1
     tester.step(2)
     tester.circuit.RESETN = 0

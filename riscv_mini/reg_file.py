@@ -24,4 +24,4 @@ class RegFile(m.Generator2):
         io.rdata1 @= m.mux([0, regs[io.raddr1]], io.raddr1.reduce_or())
         io.rdata2 @= m.mux([0, regs[io.raddr2]], io.raddr2.reduce_or())
         wen = m.bit(io.wen) & io.waddr.reduce_or()
-        regs.write(io.waddr, io.wdata, enable=wen)
+        regs.write(io.waddr, io.wdata, enable=m.enable(wen))

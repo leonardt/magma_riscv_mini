@@ -17,7 +17,7 @@ from .opcode import Funct3
 def test_br_cond(BrCond):
     x_len = 32
 
-    class DUT(m.Circuit):
+    class BrCond_DUT(m.Circuit):
         _IGNORE_UNUSED_ = True
         io = m.IO(
             done=m.Out(m.Bit),
@@ -73,7 +73,7 @@ def test_br_cond(BrCond):
             else:
                 io.out @= False
 
-    tester = fault.Tester(DUT, DUT.CLK)
+    tester = fault.Tester(BrCond_DUT, BrCond_DUT.CLK)
     tester.wait_until_high(tester.circuit.done)
     tester.assert_(tester.circuit.taken == tester.circuit.out)
     tester.compile_and_run("verilator", magma_opts={"verilator_compat": True,
