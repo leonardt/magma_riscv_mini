@@ -8,7 +8,7 @@ def reg(x):
 
 
 def imm(x):
-    return BitVector[21](x & ((1 << 20) - 1))
+    return (x & ((1 << 20) - 1))[:21]
 
 
 def concat(*args):
@@ -55,11 +55,11 @@ rand_inst = BitVector.random(32)
 
 
 def csr(inst):
-    return BitVector[12](inst >> 20)
+    return (inst >> 20)[:12]
 
 
 def rs1(inst):
-    return BitVector[12]((inst >> 15) & 0x1f)
+    return ((inst >> 15) & 0x1f)[:12]
 
 
 nop = concat(BitVector[12](0), reg(0), Funct3.ADD, reg(0), Opcode.ITYPE)
