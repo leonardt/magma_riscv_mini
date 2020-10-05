@@ -8,7 +8,12 @@ def reg(x):
 
 
 def imm(x):
-    return (x & ((1 << 20) - 1))[:21]
+    if isinstance(x, int):
+        x = BitVector[21](x)
+    else:
+        assert isinstance(x, BitVector)
+        x = x[:21]
+    return (x & ((1 << 20) - 1))
 
 
 def concat(*args):
