@@ -30,4 +30,4 @@ jobs:
     - name: Pytest
       shell: bash -l {0}
       run: |
-        pytest --pycodestyle tests/
+        pytest --pycodestyle -x tests/
