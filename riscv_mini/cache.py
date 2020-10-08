@@ -1,5 +1,5 @@
 import magma as m
-from riscv_mini.nasti import make_NastiIO
+from riscv_mini.nasti import make_NastiIO, NastiParameters
 
 
 def make_CacheReq(x_len):
@@ -27,5 +27,7 @@ def make_CacheIO(x_len):
 def make_CacheModuleIO(x_len):
     class CacheModuleIO(m.Product):
         cpu = make_CacheIO(x_len)
-        nasti = make_NastiIO(x_len)
+        nasti = make_NastiIO(
+            NastiParameters(data_bits=64, addr_bits=x_len, id_bits=5)
+        )
     return CacheModuleIO

@@ -2,46 +2,43 @@ import magma as m
 from collections import namedtuple
 
 
-NastiParameters = namedtuple('NastiParameters', ['data_bits', 'addr_bits',
-                                                 'id_bits'])
+class NastiParameters:
+    def __init__(self, data_bits, addr_bits, id_bits):
+        self.data_bits = data_bits
+        self.addr_bits = addr_bits
+        self.id_bits = id_bits
+        self.x_data_bits = self.data_bits
+        self.w_strobe_bits = self.data_bits // 8
+        self.x_addr_bits = self.addr_bits
+        self.w_id_bits = self.id_bits
+        self.r_id_bits = self.id_bits
+        self.x_id_bits = self.id_bits
+        self.x_user_bits = 1
+        self.a_w_user_bits = self.x_user_bits
+        self.w_user_bits = self.x_user_bits
+        self.b_user_bits = self.x_user_bits
+        self.a_r_user_bits = self.x_user_bits
+        self.r_user_bits = self.x_user_bits
+        self.x_len_bits = 8
+        self.x_size_bits = 3
+        self.x_burst_Bits = 2
+        self.x_cache_bits = 4
+        self.x_prot_bits = 3
+        self.x_qos_bits = 4
+        self.x_region_bits = 4
+        self.x_resp_bits = 2
 
-
-def derive_nasti_params(nasti_params):
-    class _Params:
-        external = nasti_params
-        x_data_bits = nasti_params.data_bits
-        w_strobe_bits = nasti_params.data_bits // 8
-        x_addr_bits = nasti_params.addr_bits
-        w_id_bits = nasti_params.id_bits
-        r_id_bits = nasti_params.id_bits
-        x_id_bits = nasti_params.id_bits
-        x_user_bits = 1
-        a_w_user_bits = x_user_bits
-        w_user_bits = x_user_bits
-        b_user_bits = x_user_bits
-        a_r_user_bits = x_user_bits
-        x_len_bits = 8
-        x_size_bits = 3
-        x_burst_Bits = 2
-        x_cache_bits = 4
-        x_prot_bits = 3
-        x_qos_bits = 4
-        x_region_bits = 4
-        x_resp_bits = 2
-
-        def bytes_to_x_size(bytes_):
-            m.dict_lookup({
-                1: m.bits(0, 3),
-                2: m.bits(1, 3),
-                4: m.bits(2, 3),
-                8: m.bits(3, 3),
-                16: m.bits(4, 3),
-                32: m.bits(5, 3),
-                64: m.bits(6, 3),
-                128: m.bits(7, 3),
-            }, bytes_, m.bits(0b111, 3))
-
-    return _Params
+    def bytes_to_x_size(self, bytes_):
+        return m.dict_lookup({
+            1: m.bits(0, 3),
+            2: m.bits(1, 3),
+            4: m.bits(2, 3),
+            8: m.bits(3, 3),
+            16: m.bits(4, 3),
+            32: m.bits(5, 3),
+            64: m.bits(6, 3),
+            128: m.bits(7, 3),
+        }, bytes_, m.bits(0b111, 3))
 
 
 def make_NastiMetadataIO(nasti_params):
@@ -77,10 +74,11 @@ class NastiAddressChannel(NastiMasterToSlaveChannel):
     pass
 
 
-def make_NastiResponseChannel(nasti_params):
-    class NastiResponseChannel(NastiSlaveToMasterChannel):
-        resp = m.UInt[nasti_params.x_resp_bits]
-    return NastiResponseChannel
+# TODO: Use inheritance pattern when available
+# def make_NastiResponseChannel(nasti_params):
+#     class NastiResponseChannel(NastiSlaveToMasterChannel):
+#         resp = m.UInt[nasti_params.x_resp_bits]
+#     return NastiResponseChannel
 
 
 def make_NastiWriteAddressChannel(nasti_params):
@@ -99,7 +97,8 @@ def make_NastiWriteDataChannel(nasti_params):
 
 
 def make_NastiWriteResponseChannel(nasti_params):
-    class NastiWriteResponseChannel(NastiResponseChannel):
+    class NastiWriteResponseChannel(NastiSlaveToMasterChannel):
+        resp = m.UInt[nasti_params.x_resp_bits]
         id = m.UInt[nasti_params.w_id_bits]
         user = m.UInt[nasti_params.b_user_bits]
     return NastiWriteResponseChannel
@@ -113,7 +112,8 @@ def make_NastiReadAddressChannel(nasti_params):
 
 
 def make_NastiReadDataChannel(nasti_params):
-    class NastiReadDataChannel(NastiResponseChannel):
+    class NastiReadDataChannel(NastiSlaveToMasterChannel):
+        resp = m.UInt[nasti_params.x_resp_bits]
         id = m.UInt[nasti_params.r_id_bits]
         user = m.UInt[nasti_params.r_user_bits]
     return NastiReadDataChannel
@@ -121,19 +121,21 @@ def make_NastiReadDataChannel(nasti_params):
 
 def make_NastiReadIO(nasti_params):
     class NastiReadIO(m.Product):
-        ar = m.Produce(m.Decoupled[make_NastiReadAddressChannel(nasti_params)])
-        r = m.Consume(m.Decoupled[make_NastiReadDataChannel(nasti_params)])
+        ar = m.Producer(
+            m.Decoupled[make_NastiReadAddressChannel(nasti_params)]
+        )
+        r = m.Consumer(m.Decoupled[make_NastiReadDataChannel(nasti_params)])
 
     return NastiReadIO
 
 
 def make_NastiWriteIO(nasti_params):
     class NastiWriteIO(m.Product):
-        aw = m.Produce(
+        aw = m.Producer(
             m.Decoupled[make_NastiWriteAddressChannel(nasti_params)]
         )
-        w = m.Produce(m.Decoupled[make_NastiWriteDataChannel(nasti_params)])
-        b = m.Consume(
+        w = m.Producer(m.Decoupled[make_NastiWriteDataChannel(nasti_params)])
+        b = m.Consumer(
             m.Decoupled[make_NastiWriteResponseChannel(nasti_params)]
         )
     return NastiWriteIO
@@ -141,16 +143,18 @@ def make_NastiWriteIO(nasti_params):
 
 def make_NastiIO(nasti_params):
     class NastiIO(m.Product):
-        aw = m.Produce(
+        aw = m.Producer(
             m.Decoupled[make_NastiWriteAddressChannel(nasti_params)]
         )
-        w = m.Produce(m.Decoupled[make_NastiWriteDataChannel(nasti_params)])
-        b = m.Consume(
+        w = m.Producer(m.Decoupled[make_NastiWriteDataChannel(nasti_params)])
+        b = m.Consumer(
             m.Decoupled[make_NastiWriteResponseChannel(nasti_params)]
         )
 
-        ar = m.Produce(m.Decoupled[make_NastiReadAddressChannel(nasti_params)])
-        r = m.Consume(m.Decoupled[make_NastiReadDataChannel(nasti_params)])
+        ar = m.Producer(
+            m.Decoupled[make_NastiReadAddressChannel(nasti_params)]
+        )
+        r = m.Consumer(m.Decoupled[make_NastiReadDataChannel(nasti_params)])
     return NastiIO
 
 
