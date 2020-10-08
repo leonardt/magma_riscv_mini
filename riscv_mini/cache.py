@@ -24,11 +24,11 @@ def make_CacheIO(x_len):
     return CacheIO
 
 
-def make_CacheModuleIO(x_len, nasti_params):
-    class CacheModuleIO(m.Product):
-        cpu = make_CacheIO(x_len)
-        nasti = make_NastiIO(nasti_params)
-    return CacheModuleIO
+def make_cache_ports(x_len, nasti_params):
+    return {
+        "cpu": make_CacheIO(x_len),
+        "nasti": make_NastiIO(nasti_params)
+    }
 
 
 class Cache(m.Generator2):
@@ -42,4 +42,22 @@ class Cache(m.Generator2):
         byte_offset_bits = m.bitutils.clog2(w_bytes)
         nasti_params = NastiParameters(data_bits=64, addr_bits=x_len,
                                        id_bits=5)
-        data_baets = b_bits // nasti_params.x_data_bits
+        data_beats = b_bits // nasti_params.x_data_bits
+
+        class MetaData(m.Product):
+            tag = m.UInt[t_len]
+
+        self.io = m.IO(**make_cache_ports(x_len, nasti_params))
+        self.io += m.ClockIO()
+
+        class State(m.Enum):
+            IDLE = 0
+            READ_CACHE = 1
+            WRITE_CACHE = 2
+            WRITE_BACK = 3
+            WRITE_ACK = 4
+            REFILL_READY = 5
+            REFILL = 6
+
+        state = m.Register(init=State.IDLE)()
+        state.I @= state.O
