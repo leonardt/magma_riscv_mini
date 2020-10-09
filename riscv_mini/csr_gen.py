@@ -178,18 +178,18 @@ class CSRGen(m.Generator2):
         iaddr_invalid = io.pc_check & io.addr[1]
 
         laddr_invalid = m.dict_lookup({
-            Control.LD_LW: io.addr[0:1].reduce_or(),
+            Control.LD_LW: io.addr[0:2].reduce_or(),
             Control.LD_LH: io.addr[0],
             Control.LD_LHU: io.addr[0]
         }, io.ld_type)
 
         saddr_invalid = m.dict_lookup({
-            Control.ST_SW: io.addr[0:1].reduce_or(),
+            Control.ST_SW: io.addr[0:2].reduce_or(),
             Control.ST_SH: io.addr[0]
         }, io.st_type)
 
         expt = (io.illegal | iaddr_invalid | laddr_invalid | saddr_invalid |
-                io.cmd[0:1].reduce_or() &
+                io.cmd[0:2].reduce_or() &
                 (~csr_valid | ~priv_valid) | wen & csr_RO |
                 (priv_inst & ~priv_valid) | is_E_call | is_E_break)
         io.expt @= expt

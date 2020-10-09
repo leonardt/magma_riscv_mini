@@ -74,7 +74,16 @@ def test_csr():
     data = [BV.random(x_len) for _ in range(n)]
 
     class CSR_DUT(m.Circuit):
-        io = m.IO(failed=m.Out(m.Bit), done=m.Out(m.Bit))
+        io = m.IO(done=m.Out(m.Bit),
+                  check=m.Out(m.Bit),
+                  rdata=m.Out(m.UInt[x_len]),
+                  expected_rdata=m.Out(m.UInt[x_len]),
+                  epc=m.Out(m.UInt[x_len]),
+                  expected_epc=m.Out(m.UInt[x_len]),
+                  evec=m.Out(m.UInt[x_len]),
+                  expected_evec=m.Out(m.UInt[x_len]),
+                  expt=m.Out(m.Bit),
+                  expected_expt=m.Out(m.Bit))
         io += m.ClockIO(has_resetn=True)
 
         regs = {}
@@ -306,12 +315,26 @@ def test_csr():
         #     .when(m.posedge(io.CLK))
         # m.display("csr.expt=%x, exception=%x", csr.expt, exception)\
         #     .when(m.posedge(io.CLK))
-        io.failed @= counter.O.reduce_or() & (
-            (csr.O != rdata) |
-            (csr.epc != epc) |
-            (csr.evec != evec) |
-            (csr.expt != exception)
-        )
+        io.check @= counter.O.reduce_or()
+
+        io.rdata @= csr.O
+        io.expected_rdata @= rdata
+
+        io.epc @= csr.epc
+        io.expected_epc @= epc
+
+        io.evec @= csr.evec
+        io.expected_evec @= evec
+
+        io.expt @= csr.expt
+        io.expected_expt @= exception
+
+        # io.failed @= counter.O.reduce_or() & (
+        #     (csr.O != rdata) |
+        #     (csr.epc != epc) |
+        #     (csr.evec != evec) |
+        #     (csr.expt != exception)
+        # )
         io.done @= counter.COUT
         for key, reg in regs.items():
             if not reg.I.driven():
@@ -325,9 +348,19 @@ def test_csr():
     tester.circuit.RESETN = 1
     tester.step(2)
     loop = tester._while(tester.circuit.done == 0)
-    loop.circuit.failed.expect(0)
+    # loop.circuit.failed.expect(0)
+    if_ = loop._if(tester.circuit.check)
+    if_.circuit.rdata.expect(tester.peek(CSR_DUT.expected_rdata))
+    if_.circuit.epc.expect(tester.peek(CSR_DUT.expected_epc))
+    if_.circuit.evec.expect(tester.peek(CSR_DUT.expected_evec))
+    if_.circuit.expt.expect(tester.peek(CSR_DUT.expected_expt))
     loop.step(2)
-    tester.circuit.failed.expect(0)
+    # tester.circuit.failed.expect(0)
+    if_ = tester._if(tester.circuit.check)
+    if_.circuit.rdata.expect(tester.peek(CSR_DUT.expected_rdata))
+    if_.circuit.epc.expect(tester.peek(CSR_DUT.expected_epc))
+    if_.circuit.evec.expect(tester.peek(CSR_DUT.expected_evec))
+    if_.circuit.expt.expect(tester.peek(CSR_DUT.expected_expt))
     tester.compile_and_run("verilator", magma_opts={"verilator_compat": True,
                                                     "inline": True,
-                                                    "terminate_unused": True})
+                                                    "terminate_unused": True}, flags=['--trace'])
