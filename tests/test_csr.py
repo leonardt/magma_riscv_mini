@@ -363,4 +363,4 @@ def test_csr():
     if_.circuit.expt.expect(tester.peek(CSR_DUT.expected_expt))
     tester.compile_and_run("verilator", magma_opts={"verilator_compat": True,
                                                     "inline": True,
-                                                    "terminate_unused": True}, flags=['--trace'])
+                                                    "terminate_unused": True})
