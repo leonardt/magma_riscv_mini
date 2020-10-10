@@ -24,7 +24,7 @@ jobs:
     - name: Install Python packages
       shell: bash -l {0}
       run: |
-          pip install -e git://github.com/phanrahan/magma.git@decoupled#egg=magma-lang
+          pip install -e git://github.com/phanrahan/magma.git@magma-riscv-mini#egg=magma-lang
           pip install pytest pytest-pycodestyle
           pip install -e .
     - name: Pytest

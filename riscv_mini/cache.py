@@ -1,4 +1,5 @@
 import magma as m
+import mantle
 from riscv_mini.nasti import make_NastiIO, NastiParameters
 
 
@@ -60,4 +61,53 @@ class Cache(m.Generator2):
             REFILL = 6
 
         state = m.Register(init=State.IDLE)()
-        state.I @= state.O
+
+        # memory
+        v = m.Register(m.UInt[n_sets])
+        d = m.Register(m.UInt[n_sets])
+        meta_mem = m.Memory(n_sets, MetaData, read_latency=1,
+                            has_read_enable=True)()
+        data_mem = [m.Memory(n_sets, m.Array[w_bytes, m.UInt[8]],
+                             read_latency=1, has_read_enable=True)()
+                    for _ in range(n_words)]
+
+        addr_reg = m.Register(type(self.io.cpu.req.data.addr).as_undirected())
+        cpu_data = m.Register(type(self.io.cpu.req.data.data).as_undirected())
+        cpu_mask = m.Register(type(self.io.cpu.req.data.mask).as_undirected())
+
+        # TODO: Temporary stub
+        self.io.nasti.r.ready.undriven()
+        self.io.nasti.w.valid.undriven()
+
+        # Counters
+        assert data_beats > 0
+        read_counter = mantle.CounterModM(data_beats,
+                                          max(data_beats.bit_length(), 1),
+                                          has_ce=True)
+        read_counter.CE @= m.enable(self.io.nasti.r.fired())
+        read_count, read_wrap_out = read_counter.O, read_counter.COUT
+        write_counter = mantle.CounterModM(data_beats,
+                                           max(data_beats.bit_length(), 1),
+                                           has_ce=True)
+        write_counter.CE @= m.enable(self.io.nasti.w.fired())
+        write_count, write_wrap_out = write_counter.O, write_counter.COUT
+
+        is_idle = state.O == State.IDLE
+        is_read = state.O == State.READ_CACHE
+        is_write = state.O == State.WRITE_CACHE
+        is_alloc = (state.O == State.REFILL) & read_wrap_out
+        is_alloc_reg = m.Register(m.Bit)()(is_alloc)
+
+        hit = m.Bit(name="hit")
+        wen = is_write & (hit | is_alloc_reg) & ~self.io.cpu.abort | is_alloc
+        ren = ~wen & (is_idle | is_read) & self.io.cpu.req.valid
+        ren_reg = m.Register(m.Bit)()(ren)
+
+        addr = self.io.cpu.req.data.addr
+        idx = addr[b_len:s_len + b_len]
+        tag_reg = addr_reg.O[s_len + b_len:x_len]
+        idx_reg = addr_reg.O[b_len:s_len + b_len]
+        off_reg = addr_reg.O[byte_offset_bits:b_len]
+
+        rmeta = meta_mem[idx]
+        meta_mem.RE @= m.enable(ren)

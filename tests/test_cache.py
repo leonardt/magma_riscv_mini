@@ -5,6 +5,6 @@ from riscv_mini.nasti import NastiParameters
 
 
 def test_cache():
-    MyCache = Cache(32, 4, 4, 4)
+    MyCache = Cache(32, 4, 4, 8)
     m.compile("build/MyCache", MyCache, inline=True,
               drive_undriven=True, terminate_unused=True)
