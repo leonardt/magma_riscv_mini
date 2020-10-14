@@ -129,3 +129,10 @@ class Cache(m.Generator2):
         ], is_alloc_reg)
 
         hit @= v.O[idx_reg] & (rmeta.tag == tag_reg)
+
+        # read mux
+        self.io.cpu.resp.data.data @= m.array(
+            [read[i * x_len:(i + 1) * x_len][off_reg] for i in range(n_words)]
+        )
+        self.io.cpu.resp.valid @= (is_idle | (is_read & hit) |
+                                   (is_alloc_reg & ~cpu_mask.O.reduce_or()))
