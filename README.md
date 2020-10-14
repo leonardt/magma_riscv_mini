@@ -18,6 +18,8 @@ brew install verilator gmp mpfr libmpc
 
 ## Test
 ```
+# NOTE: requires bleeding edge magma branch
+pip install -e git://github.com/phanrahan/magma.git@magma-riscv-mini#egg=magma-lang
 pip install pytest pytest-codestyle
 pip install -e .
 pytest --pycodestyle tests
