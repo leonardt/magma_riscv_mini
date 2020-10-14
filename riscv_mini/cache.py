@@ -72,9 +72,12 @@ class Cache(m.Generator2):
                              read_latency=1, has_read_enable=True)()
                     for _ in range(n_words)]
 
-        addr_reg = m.Register(type(self.io.cpu.req.data.addr).as_undirected())()
-        cpu_data = m.Register(type(self.io.cpu.req.data.data).as_undirected())()
-        cpu_mask = m.Register(type(self.io.cpu.req.data.mask).as_undirected())()
+        addr_reg = m.Register(type(self.io.cpu.req.data.addr).as_undirected(),
+                              has_enable=True)()
+        cpu_data = m.Register(type(self.io.cpu.req.data.data).as_undirected(),
+                              has_enable=True)()
+        cpu_mask = m.Register(type(self.io.cpu.req.data.mask).as_undirected(),
+                              has_enable=True)()
 
         # TODO: Temporary stub
         self.io.nasti.r.ready.undriven()
@@ -136,3 +139,12 @@ class Cache(m.Generator2):
         )[off_reg[0]]
         self.io.cpu.resp.valid @= (is_idle | (is_read & hit) |
                                    (is_alloc_reg & ~cpu_mask.O.reduce_or()))
+
+        addr_reg.I @= addr
+        addr_reg.CE @= m.enable(self.io.cpu.resp.valid.value())
+
+        cpu_data.I @= self.io.cpu.req.data.data
+        cpu_data.CE @= m.enable(self.io.cpu.resp.valid.value())
+
+        cpu_mask.I @= self.io.cpu.req.data.mask
+        cpu_mask.CE @= m.enable(self.io.cpu.resp.valid.value())
