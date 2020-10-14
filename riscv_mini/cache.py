@@ -20,8 +20,8 @@ def make_CacheResp(x_len):
 def make_CacheIO(x_len):
     class CacheIO(m.Product):
         abort = m.In(m.Bit)
-        req = m.Out(m.Valid[make_CacheReq(x_len)])
-        resp = m.In(m.Valid[make_CacheResp(x_len)])
+        req = m.In(m.Valid[make_CacheReq(x_len)])
+        resp = m.Out(m.Valid[make_CacheResp(x_len)])
     return CacheIO
 
 
@@ -100,8 +100,8 @@ class Cache(m.Generator2):
 
         hit = m.Bit(name="hit")
         wen = is_write & (hit | is_alloc_reg) & ~self.io.cpu.abort | is_alloc
-        ren = ~wen & (is_idle | is_read) & self.io.cpu.req.valid
-        ren_reg = m.Register(m.Bit)()(ren)
+        ren = m.enable(~wen & (is_idle | is_read) & self.io.cpu.req.valid)
+        ren_reg = m.enable(m.Register(m.Bit)()(ren))
 
         addr = self.io.cpu.req.data.addr
         idx = addr[b_len:s_len + b_len]
@@ -109,5 +109,20 @@ class Cache(m.Generator2):
         idx_reg = addr_reg.O[b_len:s_len + b_len]
         off_reg = addr_reg.O[byte_offset_bits:b_len]
 
-        rmeta = meta_mem[idx]
-        meta_mem.RE @= m.enable(ren)
+        rmeta = meta_mem.read(idx, ren)
+        rdata = m.concat(*reversed(
+            tuple(mem.read(idx, ren) for mem in data_mem)
+        ))
+        rdata_buf = m.Register(type(rdata), has_enable=True)()(rdata,
+                                                               CE=ren_reg)
+        refill_buf = m.Register(
+            m.Array[data_beats, m.UInt[nasti_params.x_data_bits]]
+        )()
+
+        read = m.mux([
+            m.as_bits(m.mux([
+                rdata_buf,
+                rdata
+            ], ren_reg)),
+            m.as_bits(refill_buf.O)
+        ], is_alloc_reg)
