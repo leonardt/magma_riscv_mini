@@ -93,6 +93,8 @@ def make_NastiWriteDataChannel(nasti_params):
         id = m.UInt[nasti_params.w_id_bits]
         strb = m.UInt[nasti_params.w_strobe_bits]
         user = m.UInt[nasti_params.w_user_bits]
+        data = m.UInt[nasti_params.x_data_bits]
+        last = m.Bit
     return NastiWriteDataChannel
 
 
@@ -116,6 +118,8 @@ def make_NastiReadDataChannel(nasti_params):
         resp = m.UInt[nasti_params.x_resp_bits]
         id = m.UInt[nasti_params.r_id_bits]
         user = m.UInt[nasti_params.r_user_bits]
+        data = m.UInt[nasti_params.x_data_bits]
+        last = m.Bit
     return NastiReadDataChannel
 
 

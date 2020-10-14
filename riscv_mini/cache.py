@@ -148,3 +148,26 @@ class Cache(m.Generator2):
 
         cpu_mask.I @= self.io.cpu.req.data.mask
         cpu_mask.CE @= m.enable(self.io.cpu.resp.valid.value())
+
+        wmeta = MetaData(name="wmeta")
+        wmeta.tag @= tag_reg
+
+        wmask = m.mux([
+            # TODO: zext
+            (cpu_mask.O << m.concat(off_reg, m.Bits[byte_offset_bits](0))),
+            m.SInt[4](-1)
+        ], ~is_alloc)
+
+        if len(refill_buf.O) == 1:
+            wdata_alloc = self.io.nasti.r.data.data
+        else:
+            wdata_alloc = m.concat(
+                self.io.nasti.r.data.data,
+                # TODO: not sure why they use `init.reverse`
+                # https://github.com/ucb-bar/riscv-mini/blob/release/src/main/scala/Cache.scala#L116
+                m.concat(reversed(refill_buf.O))
+            )
+        wdata = m.mux([
+            wdata_alloc,
+            m.as_bits(m.repeat(cpu_data.O, n_words))
+        ], ~is_alloc)
