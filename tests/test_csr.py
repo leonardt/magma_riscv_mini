@@ -361,6 +361,10 @@ def test_csr():
     if_.circuit.epc.expect(tester.peek(CSR_DUT.expected_epc))
     if_.circuit.evec.expect(tester.peek(CSR_DUT.expected_evec))
     if_.circuit.expt.expect(tester.peek(CSR_DUT.expected_expt))
+    m.compile("build/CSR_DUT", verilator_compat=True, inline=True,
+              terminate_unused=True)
+    import os
+    os.system("cat build/CSR_DUT")
     tester.compile_and_run("verilator", magma_opts={"verilator_compat": True,
                                                     "inline": True,
                                                     "terminate_unused": True})
