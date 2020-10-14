@@ -1,4 +1,5 @@
 import magma as m
+m.config.set_debug_mode(True)
 import mantle
 from riscv_mini.nasti import make_NastiIO, NastiParameters
 
@@ -63,17 +64,17 @@ class Cache(m.Generator2):
         state = m.Register(init=State.IDLE)()
 
         # memory
-        v = m.Register(m.UInt[n_sets])
-        d = m.Register(m.UInt[n_sets])
+        v = m.Register(m.UInt[n_sets])()
+        d = m.Register(m.UInt[n_sets])()
         meta_mem = m.Memory(n_sets, MetaData, read_latency=1,
                             has_read_enable=True)()
         data_mem = [m.Memory(n_sets, m.Array[w_bytes, m.UInt[8]],
                              read_latency=1, has_read_enable=True)()
                     for _ in range(n_words)]
 
-        addr_reg = m.Register(type(self.io.cpu.req.data.addr).as_undirected())
-        cpu_data = m.Register(type(self.io.cpu.req.data.data).as_undirected())
-        cpu_mask = m.Register(type(self.io.cpu.req.data.mask).as_undirected())
+        addr_reg = m.Register(type(self.io.cpu.req.data.addr).as_undirected())()
+        cpu_data = m.Register(type(self.io.cpu.req.data.data).as_undirected())()
+        cpu_mask = m.Register(type(self.io.cpu.req.data.mask).as_undirected())()
 
         # TODO: Temporary stub
         self.io.nasti.r.ready.undriven()
@@ -126,3 +127,5 @@ class Cache(m.Generator2):
             ], ren_reg)),
             m.as_bits(refill_buf.O)
         ], is_alloc_reg)
+
+        hit @= v.O[idx_reg] & (rmeta.tag == tag_reg)
