@@ -33,6 +33,59 @@ def make_cache_ports(x_len, nasti_params):
     }
 
 
+class ArrayMaskMem(m.Generator2):
+    """
+    Wrapper around a memory to store entries containing an array of values that
+    can be written using a write mask for each array index
+
+    Implemented using a separate memory for each array index, the mask indices
+    are mapped into the WEN ports of each sub-memory
+    """
+
+    def __init__(self, height, array_length, T, read_latency, has_read_enable):
+        addr_width = m.bitutils.clog2(height)
+        self.io = m.IO(
+            RADDR=m.In(m.Bits[addr_width]),
+            RDATA=m.Out(m.Array[array_length, T]),
+        ) + m.ClockIO()
+        if has_read_enable:
+            self.io += m.IO(RE=m.In(m.Enable))
+        self.io += m.IO(
+            WADDR=m.In(m.Bits[addr_width]),
+            WDATA=m.In(m.Array[array_length, T]),
+            WMASK=m.In(m.Bits[array_length]),
+            WE=m.In(m.Enable)
+        )
+        for i in range(array_length):
+            mem = m.Memory(height, T, read_latency,
+                           has_read_enable=has_read_enable)()
+            mem.RADDR @= self.io.RADDR
+            if has_read_enable:
+                mem.RE @= self.io.RE
+            self.io.RDATA[i] @= mem.RDATA
+
+            mem.write(self.io.WDATA[i], self.io.WADDR,
+                      m.enable(m.bit(self.io.WE) & self.io.WMASK[i]))
+
+        def read(self, addr, enable=None):
+            self.RADDR @= addr
+            if enable is not None:
+                if not has_read_enable:
+                    raise Exception("Cannot use `enable` with no read enable")
+                self.RE @= enable
+            return self.RDATA
+
+        self.read = read
+
+        def write(self, data, addr, mask, enable):
+            self.WDATA @= data
+            self.WADDR @= addr
+            self.WMASK @= mask
+            self.WE @= enable
+
+        self.write = write
+
+
 class Cache(m.Generator2):
     def __init__(self, x_len, n_ways: int, n_sets: int, b_bytes: int):
         b_bits = b_bytes << 3
@@ -68,8 +121,8 @@ class Cache(m.Generator2):
         d = m.Register(m.UInt[n_sets], has_enable=True)()
         meta_mem = m.Memory(n_sets, MetaData, read_latency=1,
                             has_read_enable=True)()
-        data_mem = [m.Memory(n_sets, m.Array[w_bytes, m.UInt[8]],
-                             read_latency=1, has_read_enable=True)()
+        data_mem = [ArrayMaskMem(n_sets, w_bytes, m.UInt[8], read_latency=1,
+                                 has_read_enable=True)()
                     for _ in range(n_words)]
 
         addr_reg = m.Register(type(self.io.cpu.req.data.addr).as_undirected(),
@@ -152,10 +205,11 @@ class Cache(m.Generator2):
         wmeta = MetaData(name="wmeta")
         wmeta.tag @= tag_reg
 
+        offset_mask = cpu_mask.O << m.concat(off_reg,
+                                             m.bits(0, byte_offset_bits))
         wmask = m.mux([
-            # TODO: zext
-            (cpu_mask.O << m.concat(off_reg, m.Bits[byte_offset_bits](0))),
-            m.SInt[4](-1)
+            m.zext_to(offset_mask, w_bytes * 8),
+            m.SInt[w_bytes * 8](-1)
         ], ~is_alloc)
 
         if len(refill_buf.O) == 1:
@@ -178,3 +232,8 @@ class Cache(m.Generator2):
         d.CE @= m.enable(wen)
 
         meta_mem.write(wmeta, idx_reg, m.enable(wen & is_alloc))
+        for i, mem in enumerate(data_mem):
+            data = [wdata[i * x_len + j * 8:i * x_len + (j + 1) * 8]
+                    for j in range(w_bytes)]
+            mem.write(m.array(data), idx_reg,
+                      wmask[i * w_bytes: (i + 1) * w_bytes], m.enable(wen))
