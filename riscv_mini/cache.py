@@ -1,7 +1,9 @@
 import magma as m
-# m.config.set_debug_mode(True)
 import mantle
-from riscv_mini.nasti import make_NastiIO, NastiParameters
+from riscv_mini.nasti import (make_NastiIO, NastiParameters,
+                              NastiReadAddressChannel,
+                              NastiWriteAddressChannel, NastiWriteDataChannel)
+m.config.set_debug_mode(True)
 
 
 def make_CacheReq(x_len):
@@ -132,8 +134,7 @@ class Cache(m.Generator2):
         cpu_mask = m.Register(type(self.io.cpu.req.data.mask).as_undirected(),
                               has_enable=True)()
 
-        # TODO: Temporary stub
-        self.io.nasti.r.ready.undriven()
+        self.io.nasti.r.ready @= state.O == State.REFILL
         self.io.nasti.w.valid.undriven()
 
         # Counters
@@ -237,3 +238,11 @@ class Cache(m.Generator2):
                     for j in range(w_bytes)]
             mem.write(m.array(data), idx_reg,
                       wmask[i * w_bytes: (i + 1) * w_bytes], m.enable(wen))
+
+        tag_and_idx = m.zext_to(m.concat(tag_reg, idx_reg),
+                                nasti_params.x_addr_bits)
+        self.io.nasti.ar.data @= NastiReadAddressChannel(
+            nasti_params, 0, tag_and_idx << m.Bits[len(tag_and_idx)](b_len),
+            m.bitutils.clog2(nasti_params.x_data_bits // 8), data_beats - 1)
+        # TODO: Default ar.valid
+        # io.nasti.ar.valid @= False

@@ -21,7 +21,7 @@ class NastiParameters:
         self.r_user_bits = self.x_user_bits
         self.x_len_bits = 8
         self.x_size_bits = 3
-        self.x_burst_Bits = 2
+        self.x_burst_bits = 2
         self.x_cache_bits = 4
         self.x_prot_bits = 3
         self.x_qos_bits = 4
@@ -85,6 +85,17 @@ def make_NastiWriteAddressChannel(nasti_params):
     class NastiWriteAddressChannel(NastiAddressChannel):
         id = m.UInt[nasti_params.w_id_bits]
         user = m.UInt[nasti_params.a_w_user_bits]
+
+        # metadata/address channel common
+        addr = m.UInt[nasti_params.x_addr_bits]
+        length = m.UInt[nasti_params.x_len_bits]
+        size = m.UInt[nasti_params.x_size_bits]
+        burst = m.UInt[nasti_params.x_burst_bits]
+        lock = m.Bit
+        cache = m.UInt[nasti_params.x_cache_bits]
+        prot = m.UInt[nasti_params.x_prot_bits]
+        qos = m.UInt[nasti_params.x_qos_bits]
+        region = m.UInt[nasti_params.x_region_bits]
     return NastiWriteAddressChannel
 
 
@@ -110,6 +121,17 @@ def make_NastiReadAddressChannel(nasti_params):
     class NastiReadAddressChannel(NastiAddressChannel):
         id = m.UInt[nasti_params.r_id_bits]
         user = m.UInt[nasti_params.a_r_user_bits]
+
+        # metadata/address channel common
+        addr = m.UInt[nasti_params.x_addr_bits]
+        length = m.UInt[nasti_params.x_len_bits]
+        size = m.UInt[nasti_params.x_size_bits]
+        burst = m.UInt[nasti_params.x_burst_bits]
+        lock = m.Bit
+        cache = m.UInt[nasti_params.x_cache_bits]
+        prot = m.UInt[nasti_params.x_prot_bits]
+        qos = m.UInt[nasti_params.x_qos_bits]
+        region = m.UInt[nasti_params.x_region_bits]
     return NastiReadAddressChannel
 
 
