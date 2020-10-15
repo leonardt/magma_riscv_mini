@@ -146,8 +146,15 @@ class Cache(m.Generator2):
                                               has_ce=True)
             read_counter.CE @= m.enable(self.io.nasti.r.fired())
             read_count, read_wrap_out = read_counter.O, read_counter.COUT
+
+            write_counter = mantle.CounterModM(counter_m,
+                                               max(counter_m.bit_length(), 1),
+                                               has_ce=True)
+            write_counter.CE @= m.enable(self.io.nasti.w.fired())
+            write_count, write_wrap_out = write_counter.O, write_counter.COUT
         else:
             read_count, read_wrap_out = 0, 1
+            write_count, write_wrap_out = 0, 1
 
         refill_buf = m.Register(
             m.Array[data_beats, m.UInt[nasti_params.x_data_bits]],
@@ -160,12 +167,6 @@ class Cache(m.Generator2):
                                         self.io.nasti.r.data.data,
                                         read_count)
         refill_buf.CE @= m.enable(self.io.nasti.r.fired())
-
-        write_counter = mantle.CounterModM(data_beats,
-                                           max(data_beats.bit_length(), 1),
-                                           has_ce=True)
-        write_counter.CE @= m.enable(self.io.nasti.w.fired())
-        write_count, write_wrap_out = write_counter.O, write_counter.COUT
 
         is_idle = state.O == State.IDLE
         is_read = state.O == State.READ_CACHE
@@ -270,3 +271,15 @@ class Cache(m.Generator2):
             m.Bits[len(rmeta_and_idx)](b_len),
             m.bitutils.clog2(nasti_params.x_data_bits // 8), data_beats - 1)
         # io.nasti.aw.valid @= False
+
+        self.io.nasti.w.data @= NastiWriteDataChannel(
+            nasti_params,
+            m.array(
+                [read[i * nasti_params.x_data_bits:
+                      (i + 1) * nasti_params.x_data_bits]
+                 for i in range(data_beats)]
+            )[write_count],
+            None, write_wrap_out
+        )
+        # self.io.nasti.w.valid @= False
+        # self.io.nasti.b.ready @= False
