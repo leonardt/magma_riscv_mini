@@ -64,8 +64,8 @@ class Cache(m.Generator2):
         state = m.Register(init=State.IDLE)()
 
         # memory
-        v = m.Register(m.UInt[n_sets])()
-        d = m.Register(m.UInt[n_sets])()
+        v = m.Register(m.UInt[n_sets], has_enable=True)()
+        d = m.Register(m.UInt[n_sets], has_enable=True)()
         meta_mem = m.Memory(n_sets, MetaData, read_latency=1,
                             has_read_enable=True)()
         data_mem = [m.Memory(n_sets, m.Array[w_bytes, m.UInt[8]],
@@ -171,3 +171,10 @@ class Cache(m.Generator2):
             wdata_alloc,
             m.as_bits(m.repeat(cpu_data.O, n_words))
         ], ~is_alloc)
+
+        v.I @= m.set_bit(v.O, True, idx_reg)
+        v.CE @= m.enable(wen)
+        d.I @= m.set_bit(d.O, ~is_alloc, idx_reg)
+        d.CE @= m.enable(wen)
+
+        meta_mem.write(wmeta, idx_reg, m.enable(wen & is_alloc))
