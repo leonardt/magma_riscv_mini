@@ -283,3 +283,5 @@ class Cache(m.Generator2):
         )
         # self.io.nasti.w.valid @= False
         # self.io.nasti.b.ready @= False
+
+        is_dirty = v.O[idx_reg] & d.O[idx_reg]
