@@ -25,6 +25,8 @@ jobs:
       shell: bash -l {0}
       run: |
           pip install -e git://github.com/phanrahan/magma.git@magma-riscv-mini#egg=magma-lang
+          pip install -e git://github.com/phanrahan/mantle.git@remove-dynamic-mux-select#egg=mantle
+
           pip install pytest pytest-pycodestyle
           pip install -e .
     - name: Pytest

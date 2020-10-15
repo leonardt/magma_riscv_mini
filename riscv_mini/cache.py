@@ -134,16 +134,33 @@ class Cache(m.Generator2):
         cpu_mask = m.Register(type(self.io.cpu.req.data.mask).as_undirected(),
                               has_enable=True)()
 
-        self.io.nasti.r.ready @= state.O == State.REFILL
         self.io.nasti.w.valid.undriven()
 
+        self.io.nasti.r.ready @= state.O == State.REFILL
         # Counters
         assert data_beats > 0
-        read_counter = mantle.CounterModM(data_beats,
-                                          max(data_beats.bit_length(), 1),
-                                          has_ce=True)
-        read_counter.CE @= m.enable(self.io.nasti.r.fired())
-        read_count, read_wrap_out = read_counter.O, read_counter.COUT
+        if data_beats > 1:
+            counter_m = data_beats - 1
+            read_counter = mantle.CounterModM(counter_m,
+                                              max(counter_m.bit_length(), 1),
+                                              has_ce=True)
+            read_counter.CE @= m.enable(self.io.nasti.r.fired())
+            read_count, read_wrap_out = read_counter.O, read_counter.COUT
+        else:
+            read_count, read_wrap_out = 0, 1
+
+        refill_buf = m.Register(
+            m.Array[data_beats, m.UInt[nasti_params.x_data_bits]],
+            has_enable=True
+        )()
+        if data_beats == 1:
+            refill_buf.I[0] @= self.io.nasti.r.data.data
+        else:
+            refill_buf.I @= m.set_index(refill_buf.O,
+                                        self.io.nasti.r.data.data,
+                                        read_count)
+        refill_buf.CE @= m.enable(self.io.nasti.r.fired())
+
         write_counter = mantle.CounterModM(data_beats,
                                            max(data_beats.bit_length(), 1),
                                            has_ce=True)
@@ -173,9 +190,6 @@ class Cache(m.Generator2):
         ))
         rdata_buf = m.Register(type(rdata), has_enable=True)()(rdata,
                                                                CE=ren_reg)
-        refill_buf = m.Register(
-            m.Array[data_beats, m.UInt[nasti_params.x_data_bits]]
-        )()
 
         read = m.mux([
             m.as_bits(m.mux([
@@ -190,7 +204,7 @@ class Cache(m.Generator2):
         # read mux
         self.io.cpu.resp.data.data @= m.array(
             [read[i * x_len:(i + 1) * x_len] for i in range(n_words)]
-        )[off_reg[0]]
+        )[off_reg]
         self.io.cpu.resp.valid @= (is_idle | (is_read & hit) |
                                    (is_alloc_reg & ~cpu_mask.O.reduce_or()))
 
@@ -220,16 +234,18 @@ class Cache(m.Generator2):
                 self.io.nasti.r.data.data,
                 # TODO: not sure why they use `init.reverse`
                 # https://github.com/ucb-bar/riscv-mini/blob/release/src/main/scala/Cache.scala#L116
-                m.concat(reversed(refill_buf.O))
+                # TODO: Needed to drop first index here to match type with
+                # other mux input?
+                m.concat(*reversed(refill_buf.O[1:]))
             )
         wdata = m.mux([
             wdata_alloc,
             m.as_bits(m.repeat(cpu_data.O, n_words))
         ], ~is_alloc)
 
-        v.I @= m.set_bit(v.O, True, idx_reg)
+        v.I @= m.set_index(v.O, m.bit(True), idx_reg)
         v.CE @= m.enable(wen)
-        d.I @= m.set_bit(d.O, ~is_alloc, idx_reg)
+        d.I @= m.set_index(d.O, ~is_alloc, idx_reg)
         d.CE @= m.enable(wen)
 
         meta_mem.write(wmeta, idx_reg, m.enable(wen & is_alloc))
@@ -246,3 +262,11 @@ class Cache(m.Generator2):
             m.bitutils.clog2(nasti_params.x_data_bits // 8), data_beats - 1)
         # TODO: Default ar.valid
         # io.nasti.ar.valid @= False
+
+        rmeta_and_idx = m.zext_to(m.concat(rmeta.tag, idx_reg),
+                                  nasti_params.x_addr_bits)
+        self.io.nasti.aw.data @= NastiWriteAddressChannel(
+            nasti_params, 0, rmeta_and_idx <<
+            m.Bits[len(rmeta_and_idx)](b_len),
+            m.bitutils.clog2(nasti_params.x_data_bits // 8), data_beats - 1)
+        # io.nasti.aw.valid @= False
