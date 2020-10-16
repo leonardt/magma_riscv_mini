@@ -3,7 +3,7 @@ import mantle
 from riscv_mini.nasti import (make_NastiIO, NastiParameters,
                               NastiReadAddressChannel,
                               NastiWriteAddressChannel, NastiWriteDataChannel)
-m.config.set_debug_mode(True)
+# m.config.set_debug_mode(True)
 
 
 def make_CacheReq(x_len):
