@@ -134,8 +134,6 @@ class Cache(m.Generator2):
         cpu_mask = m.Register(type(self.io.cpu.req.data.mask).as_undirected(),
                               has_enable=True)()
 
-        self.io.nasti.w.valid.undriven()
-
         self.io.nasti.r.ready @= state.O == State.REFILL
         # Counters
         assert data_beats > 0
@@ -150,7 +148,6 @@ class Cache(m.Generator2):
             write_counter = mantle.CounterModM(counter_m,
                                                max(counter_m.bit_length(), 1),
                                                has_ce=True)
-            write_counter.CE @= m.enable(self.io.nasti.w.fired())
             write_count, write_wrap_out = write_counter.O, write_counter.COUT
         else:
             read_count, read_wrap_out = 0, 1
@@ -261,8 +258,6 @@ class Cache(m.Generator2):
         self.io.nasti.ar.data @= NastiReadAddressChannel(
             nasti_params, 0, tag_and_idx << m.Bits[len(tag_and_idx)](b_len),
             m.bitutils.clog2(nasti_params.x_data_bits // 8), data_beats - 1)
-        # TODO: Default ar.valid
-        # io.nasti.ar.valid @= False
 
         rmeta_and_idx = m.zext_to(m.concat(rmeta.tag, idx_reg),
                                   nasti_params.x_addr_bits)
@@ -270,7 +265,6 @@ class Cache(m.Generator2):
             nasti_params, 0, rmeta_and_idx <<
             m.Bits[len(rmeta_and_idx)](b_len),
             m.bitutils.clog2(nasti_params.x_data_bits // 8), data_beats - 1)
-        # io.nasti.aw.valid @= False
 
         self.io.nasti.w.data @= NastiWriteDataChannel(
             nasti_params,
@@ -281,7 +275,78 @@ class Cache(m.Generator2):
             )[write_count],
             None, write_wrap_out
         )
-        # self.io.nasti.w.valid @= False
-        # self.io.nasti.b.ready @= False
 
         is_dirty = v.O[idx_reg] & d.O[idx_reg]
+
+        # TODO: Have to use temporary so we can invoke `fired()`
+        aw_valid = m.Bit(name="aw_valid")
+        self.io.nasti.aw.valid @= aw_valid
+
+        ar_valid = m.Bit(name="ar_valid")
+        self.io.nasti.ar.valid @= ar_valid
+
+        b_ready = m.Bit(name="b_ready")
+        self.io.nasti.b.ready @= b_ready
+
+        @m.inline_combinational()
+        def logic():
+            state.I @= state.O
+            aw_valid @= False
+            ar_valid @= False
+            self.io.nasti.w.valid @= False
+            b_ready @= False
+            if state.O == State.IDLE:
+                if self.io.cpu.req.valid:
+                    if self.io.cpu.req.data.mask.reduce_or():
+                        state.I @= State.WRITE_CACHE
+                    else:
+                        state.I @= State.READ_CACHE
+            elif state.O == State.READ_CACHE:
+                if hit:
+                    if self.io.cpu.req.valid:
+                        if self.io.cpu.req.data.mask.reduce_or():
+                            state.I @= State.WRITE_CACHE
+                        else:
+                            state.I @= State.READ_CACHE
+                    else:
+                        state.I @= State.IDLE
+                else:
+                    aw_valid @= is_dirty
+                    ar_valid @= ~is_dirty
+                    if self.io.nasti.aw.fired():
+                        state.I @= State.WRITE_BACK
+                    elif self.io.nasti.ar.fired():
+                        state.I @= State.REFILL
+            elif state.O == State.WRITE_CACHE:
+                if hit | is_alloc_reg | self.io.cpu.abort:
+                    state.I @= State.IDLE
+                else:
+                    aw_valid @= is_dirty
+                    ar_valid @= ~is_dirty
+                    if self.io.nasti.aw.fired():
+                        state.I @= State.WRITE_BACK
+                    else:
+                        state.I @= State.REFILL
+            elif state.O == State.WRITE_BACK:
+                self.io.nasti.w.valid @= True
+                if write_wrap_out:
+                    state.I @= State.WRITE_ACK
+            elif state.O == State.WRITE_ACK:
+                b_ready @= True
+                if self.io.nasti.b.fired():
+                    state.I @= State.REFILL_READY
+            elif state.O == State.REFILL_READY:
+                ar_valid @= True
+                if self.io.nasti.ar.fired():
+                    state.I @= State.REFILL
+            elif state.O == State.REFILL:
+                if read_wrap_out:
+                    if cpu_mask.O.reduce_or():
+                        state.I @= State.WRITE_CACHE
+                    else:
+                        state.I @= State.IDLE
+
+        if data_beats > 1:
+            # TODO: Have to do this at the end since the inline comb logic
+            # wires up nasti.w
+            write_counter.CE @= m.enable(self.io.nasti.w.fired())
