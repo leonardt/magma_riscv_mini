@@ -29,8 +29,16 @@ class GoldCache(m.Generator2):
 
         data = m.Memory(n_sets, m.UInt[b_bits])()
         tags = m.Memory(n_sets, m.UInt[t_len])()
-        v = m.Memory(n_sets, m.Bit)
-        d = m.Memory(n_sets, m.Bit)
+        v = m.Memory(n_sets, m.Bit)()
+        d = m.Memory(n_sets, m.Bit)()
+
+        req = self.io.req.data
+        tag = req.addr >> (b_len + s_len)
+        idx = req.addr[b_len:b_len + s_len]
+        off = req.addr[0:b_len]
+        read = data.read(idx)
+
+        self.io.resp.data.data @= read >> m.zext_to((off // 4) * x_len, b_bits)
 
 
 def test_cache():
