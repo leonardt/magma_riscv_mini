@@ -1,7 +1,10 @@
 import magma as m
+m.config.set_debug_mode(True)
 import mantle
 
-from riscv_mini.nasti import make_NastiIO, NastiParameters
+from riscv_mini.nasti import (make_NastiIO, NastiParameters,
+                              NastiReadAddressChannel,
+                              NastiWriteAddressChannel, NastiWriteDataChannel)
 from riscv_mini.cache import Cache, make_CacheResp, make_CacheReq
 
 
@@ -34,7 +37,7 @@ class GoldCache(m.Generator2):
         d = m.Memory(n_sets, m.Bit)()
 
         req = self.io.req.data
-        tag = req.addr >> (b_len + s_len)
+        tag = (req.addr >> (b_len + s_len))[:t_len]
         idx = req.addr[b_len:b_len + s_len]
         off = req.addr[:b_len]
         read = data.read(idx)
@@ -70,6 +73,87 @@ class GoldCache(m.Generator2):
 
         self.io.resp.data.data @= (read >> m.zext_to((off // 4) * x_len,
                                                      b_bits))[:x_len]
+        self.io.nasti.ar.data @= NastiReadAddressChannel(
+            nasti_params, 0, (req.addr >> b_len) << b_len, size, length)
+        tags_rdata = tags.read(idx)
+        self.io.nasti.aw.data @= NastiWriteAddressChannel(
+            nasti_params, 0,
+            m.bits(m.concat(tags_rdata, idx), 32) << b_len, size, length)
+        self.io.nasti.w.data @= NastiWriteDataChannel(
+            nasti_params,
+            (read >> (m.zext_to(w_cnt, b_bits) *
+                      nasti_params.x_data_bits))[:nasti_params.x_data_bits],
+            None, w_done)
+        self.io.nasti.w.valid @= state.O == State.WRITE
+        self.io.nasti.b.ready @= state.O == State.WRITE_ACK
+        self.io.nasti.r.ready @= state.O == State.READ
+
+        d_wen = m.Bit(name="d_wen")
+        d.write(True, idx, m.enable(d_wen))
+
+        data_wen = m.Bit(name="data_wen")
+        data_wdata = m.UInt[b_bits](name="data_wdata")
+        data.write(data_wdata, idx, m.enable(data_wen))
+
+        v_wen = m.Bit(name="v_wen")
+        v.write(True, idx, m.enable(v_wen))
+        v_rdata = v.read(idx)
+
+        tags_wen = m.Bit(name="tags_wen")
+        tags.write(tag, idx, m.enable(tags_wen))
+
+        d_rdata = d.read(idx)
+
+        @m.inline_combinational()
+        def logic():
+            self.io.resp.valid @= False
+            self.io.req.ready @= False
+            self.io.nasti.ar.valid @= False
+            self.io.nasti.aw.valid @= False
+
+            d_wen @= False
+
+            data_wen @= False
+            data_wdata @= m.UInt[b_bits](0)
+            state.I @= state.O
+
+            tags_wen @= False
+            v_wen @= False
+
+            if state.O == State.IDLE:
+                if self.io.req.valid & self.io.resp.ready:
+                    if v_rdata & (tags_rdata == tag):
+                        if req.mask.reduce_or():
+                            d_wen @= True
+                            data_wdata @= write
+                        self.io.req.ready @= True
+                        self.io.resp.valid @= True
+                    else:
+                        if d_rdata:
+                            self.io.nasti.aw.valid @= True
+                            state.I @= State.WRITE
+                        else:
+                            self.io.nasti.ar.valid @= True
+                            state.I @= State.READ
+            elif state.O == State.WRITE:
+                if w_done:
+                    state.I @= State.WRITE_ACK
+            elif state.O == State.WRITE_ACK:
+                if self.io.nasti.b.valid:
+                    data_wdata @= 0
+                    data_wen @= True
+                    state.I @= State.READ
+            elif state.O == State.READ:
+                if self.io.nasti.r.valid:
+                    data_wdata @= read | (m.zext_to(self.io.nasti.r.data.data,
+                                                    b_bits) <<
+                                          (m.zext_to(r_cnt, b_bits) *
+                                           nasti_params.x_data_bits))
+                    data_wen @= True
+                if r_done:
+                    tags_wen @= True
+                    v_wen @= True
+                    state.I @= State.IDLE
 
 
 def test_cache():
