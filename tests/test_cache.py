@@ -45,7 +45,6 @@ class GoldCache(m.Generator2):
                  0xff) << (8 * i)
             ], ((off // 4) == (i // 4)) & (req.mask >> (i & 0x3))[0])[:b_bits]
 
-
         self.io.resp.data.data @= (read >> m.zext_to((off // 4) * x_len,
                                                      b_bits))[:x_len]
 
