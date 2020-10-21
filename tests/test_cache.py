@@ -68,7 +68,6 @@ class GoldCache(m.Generator2):
                                      self.io.nasti.r.valid)
         w_cnt, w_done = write_counter.O, write_counter.COUT
 
-
         self.io.resp.data.data @= (read >> m.zext_to((off // 4) * x_len,
                                                      b_bits))[:x_len]
 
