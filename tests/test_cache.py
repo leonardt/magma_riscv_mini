@@ -35,15 +35,26 @@ class GoldCache(m.Generator2):
         req = self.io.req.data
         tag = req.addr >> (b_len + s_len)
         idx = req.addr[b_len:b_len + s_len]
-        off = req.addr[0:b_len]
+        off = req.addr[:b_len]
         read = data.read(idx)
+        write = m.bits(0, b_bits)
+        for i in range(b_bytes):
+            write |= m.mux([
+                (read & (0xff << (8 * i))),
+                ((m.zext_to(req.data, b_bits) >> ((8 * (i & 0x3)))) &
+                 0xff) << (8 * i)
+            ], ((off // 4) == (i // 4)) & (req.mask >> (i & 0x3))[0])[:b_bits]
 
-        self.io.resp.data.data @= read >> m.zext_to((off // 4) * x_len, b_bits)
+
+        self.io.resp.data.data @= (read >> m.zext_to((off // 4) * x_len,
+                                                     b_bits))[:x_len]
 
 
 def test_cache():
-    MyCache = Cache(32, 1, 256, 4 * (32 >> 3))
-    m.compile("build/MyCache", MyCache, inline=True,
-              drive_undriven=True, terminate_unused=True)
+    class DUT(m.Circuit):
+        io = m.IO(O=m.Out(m.Bit))
+        MyCache = Cache(32, 1, 256, 4 * (32 >> 3))()
+        GoldCache(32, 1, 256, 4 * (32 >> 3))()
 
-    GoldCache(32, 1, 256, 4 * (32 >> 3))
+    m.compile("build/CacheDUT", DUT, inline=True, drive_undriven=True,
+              terminate_unused=True)
