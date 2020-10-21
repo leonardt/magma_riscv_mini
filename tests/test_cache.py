@@ -1,4 +1,5 @@
 import magma as m
+import mantle
 
 from riscv_mini.nasti import make_NastiIO, NastiParameters
 from riscv_mini.cache import Cache, make_CacheResp, make_CacheReq
@@ -44,6 +45,29 @@ class GoldCache(m.Generator2):
                 ((m.zext_to(req.data, b_bits) >> ((8 * (i & 0x3)))) &
                  0xff) << (8 * i)
             ], ((off // 4) == (i // 4)) & (req.mask >> (i & 0x3))[0])[:b_bits]
+
+        class State(m.Enum):
+            IDLE = 0
+            WRITE = 1
+            WRITE_ACK = 1
+            READ = 1
+
+        state = m.Register(init=State.IDLE)()
+
+        counter_m = data_beats - 1
+        read_counter = mantle.CounterModM(counter_m,
+                                          max(counter_m.bit_length(), 1),
+                                          has_ce=True)
+        read_counter.CE @= m.enable(state.O == State.READ)
+        r_cnt, r_done = read_counter.O, read_counter.COUT
+
+        write_counter = mantle.CounterModM(counter_m,
+                                           max(counter_m.bit_length(), 1),
+                                           has_ce=True)
+        write_counter.CE @= m.enable(state.O == State.WRITE &
+                                     self.io.nasti.r.valid)
+        w_cnt, w_done = write_counter.O, write_counter.COUT
+
 
         self.io.resp.data.data @= (read >> m.zext_to((off // 4) * x_len,
                                                      b_bits))[:x_len]
