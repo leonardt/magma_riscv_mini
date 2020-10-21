@@ -1,5 +1,4 @@
 import magma as m
-m.config.set_debug_mode(True)
 import mantle
 
 from riscv_mini.nasti import (make_NastiIO, NastiParameters,
