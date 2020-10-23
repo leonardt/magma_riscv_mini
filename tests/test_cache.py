@@ -7,6 +7,69 @@ from riscv_mini.nasti import (make_NastiIO, NastiParameters,
 from riscv_mini.cache import Cache, make_CacheResp, make_CacheReq
 
 
+class Queue(m.Generator2):
+    def __init__(self, T, entries, pipe=False, flow=False):
+        assert entries >= 0
+        self.io = m.IO(
+            # Flipped since enq/deq is from perspective of the client
+            enq=m.DeqIO[T],
+            deq=m.EnqIO[T],
+            count=m.Out(m.UInt[m.bitutils.clog2(entries + 1)])
+        )
+
+        ram = m.Memory(entries, T)()
+        counter_m = entries - 1
+        enq_ptr = mantle.CounterModM(counter_m, counter_m.bit_length(),
+                                     has_ce=True)
+        deq_ptr = mantle.CounterModM(counter_m, counter_m.bit_length(),
+                                     has_ce=True)
+        maybe_full = m.Register(init=False, has_enable=True)()
+
+        ptr_match = enq_ptr.O == deq_ptr.O
+        empty = ptr_match & ~maybe_full.O
+        full = ptr_match & maybe_full.O
+
+        self.io.deq.valid @= ~empty
+        self.io.enq.ready @= ~full
+
+        do_enq = m.enable(self.io.enq.fired())
+        do_deq = m.enable(self.io.deq.fired())
+
+        ram.write(self.io.enq.data, enq_ptr.O, do_enq)
+        enq_ptr.CE @= do_enq
+
+        deq_ptr.CE @= do_deq
+
+        maybe_full.I @= do_enq
+        maybe_full.CE @= m.enable(do_enq != do_deq)
+        self.io.deq.data @= ram[deq_ptr.O]
+
+        if flow:
+            raise NotImplementedError()
+        if pipe:
+            raise NotImplementedError()
+
+        def ispow2(n):
+            return (n & (n - 1) == 0) and n != 0
+
+        ptr_diff = enq_ptr.O - deq_ptr.O
+        count_len = len(self.io.count)
+        if ispow2(entries):
+            self.io.count @= m.mux([m.bits(0, count_len), entries],
+                                   maybe_full.O & ptr_match)
+        else:
+            self.io.count @= m.mux([
+                m.mux([
+                    m.bits(0, count_len),
+                    entries
+                ], maybe_full.O),
+                m.mux([
+                    ptr_diff,
+                    entries + ptr_diff
+                ], deq_ptr.O > enq_ptr.O)
+            ], ptr_match)
+
+
 class GoldCache(m.Generator2):
     def __init__(self, x_len, n_ways: int, n_sets: int, b_bytes: int):
         nasti_params = NastiParameters(data_bits=64, addr_bits=x_len,
@@ -155,8 +218,9 @@ class GoldCache(m.Generator2):
 def test_cache():
     class DUT(m.Circuit):
         io = m.IO(O=m.Out(m.Bit))
-        MyCache = Cache(32, 1, 256, 4 * (32 >> 3))()
-        GoldCache(32, 1, 256, 4 * (32 >> 3))()
+        actual_cache = Cache(32, 1, 256, 4 * (32 >> 3))()
+        gold_cache = GoldCache(32, 1, 256, 4 * (32 >> 3))()
+        q = Queue(m.UInt[4], 32)
 
     m.compile("build/CacheDUT", DUT, inline=True, drive_undriven=True,
               terminate_unused=True)
