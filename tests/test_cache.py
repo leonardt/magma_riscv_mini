@@ -22,9 +22,6 @@ class GoldCache(m.Generator2):
         b_len = m.bitutils.clog2(b_bytes)
         s_len = m.bitutils.clog2(n_sets)
         t_len = x_len - (s_len + b_len)
-        n_words = b_bits // x_len
-        w_bytes = x_len // 8
-        byte_offset_bits = m.bitutils.clog2(w_bytes)
         nasti_params = NastiParameters(data_bits=64, addr_bits=x_len,
                                        id_bits=5)
         data_beats = b_bits // nasti_params.x_data_bits
