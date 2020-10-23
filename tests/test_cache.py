@@ -2,7 +2,7 @@ import itertools
 import random
 from hwtypes import BitVector
 import magma as m
-m.config.set_debug_mode(True)
+# m.config.set_debug_mode(True)
 import mantle
 import fault as f
 
@@ -439,6 +439,7 @@ def test_cache():
             timeout.I @= timeout.O
             mem_wen1 @= m.bit(False)
             check_resp_data @= m.bit(False)
+            state.I @= state.O
             if state.O == TestState.INIT:
                 mem_wen1 @= m.bit(True)
                 if init_counter.COUT:
@@ -456,8 +457,21 @@ def test_cache():
             elif state.O == TestState.DONE:
                 state.I @= TestState.START
 
+        f.assert_immediate((state.O != TestState.WAIT) | (timeout.O < 100))
         f.assert_immediate(~check_resp_data | (dut.cpu.resp.data.data ==
                                                gold_resp.data.data))
+        m.display("test_state=%x", state.O).when(m.posedge(io.CLK))
+        m.display("dut valid = %x, gold valid = %x", dut.cpu.resp.valid,
+                  gold_resp.valid).when(m.posedge(io.CLK))
+        m.display("%x ?= %x", dut.cpu.resp.data.data,
+                  gold_resp.data.data).when(m.posedge(io.CLK)).if_(check_resp_data)
         io.done @= test_counter.COUT
 
-    m.compile("build/CacheDUT", DUT, inline=True)
+    tester = f.Tester(DUT, DUT.CLK)
+    # for i in range(100):
+    #     tester.step(2)
+    tester.wait_until_high(DUT.done)
+    tester.compile_and_run("verilator", magma_opts={"inline": True,
+                                                    "verilator_compat": True},
+                           flags=['-Wno-unused', '--assert'],
+                           disp_type="realtime")
