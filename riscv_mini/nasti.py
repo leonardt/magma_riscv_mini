@@ -264,8 +264,6 @@ def NastiReadDataChannel(nasti_params, id, data, last=True, resp=0):
 
 def NastiWriteResponseChannel(nasti_params, id, resp=0):
     b = make_NastiWriteResponseChannel(nasti_params)()
-    if strb is None:
-        strb = m.repeat(1, nasti_params.w_strobe_bits)
     b.id @= id
     b.resp @= resp
     b.user @= 0
