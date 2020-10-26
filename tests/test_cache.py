@@ -434,6 +434,7 @@ def test_cache():
         mem_wdata1 @= m.mux(init_data, init_counter.O)
 
         check_resp_data = m.Bit()
+
         @m.inline_combinational()
         def state_fsm():
             timeout.I @= timeout.O
@@ -461,13 +462,15 @@ def test_cache():
         f.assert_immediate(~check_resp_data | (dut.cpu.resp.data.data ==
                                                gold_resp.data.data))
         m.display("test_state=%x", state.O).when(m.posedge(io.CLK))
-        m.display("dut req valid = %x", dut.cpu.req.valid).when(m.posedge(io.CLK))
+        m.display("dut req valid = %x",
+                  dut.cpu.req.valid).when(m.posedge(io.CLK))
         m.display("gold req valid = %x, ready = %x", gold_req.valid,
                   gold_req.ready).when(m.posedge(io.CLK))
-        m.display("dut resp valid = %x, gold resp valid = %x", dut.cpu.resp.valid,
-                  gold_resp.valid).when(m.posedge(io.CLK))
+        m.display("dut resp valid = %x, gold resp valid = %x",
+                  dut.cpu.resp.valid, gold_resp.valid).when(m.posedge(io.CLK))
         m.display("%x ?= %x", dut.cpu.resp.data.data,
-                  gold_resp.data.data).when(m.posedge(io.CLK)).if_(check_resp_data)
+                  gold_resp.data.data).when(m.posedge(io.CLK))\
+            .if_(check_resp_data)
         io.done @= test_counter.COUT
 
     tester = f.Tester(DUT, DUT.CLK)
