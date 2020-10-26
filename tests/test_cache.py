@@ -38,15 +38,15 @@ class Queue(m.Generator2):
         self.io.deq.valid @= ~empty
         self.io.enq.ready @= ~full
 
-        do_enq = m.enable(self.io.enq.fired())
-        do_deq = m.enable(self.io.deq.fired())
+        do_enq = self.io.enq.fired()
+        do_deq = self.io.deq.fired()
 
-        ram.write(self.io.enq.data, enq_ptr.O, do_enq)
-        enq_ptr.CE @= do_enq
+        ram.write(self.io.enq.data, enq_ptr.O, m.enable(do_enq))
 
-        deq_ptr.CE @= do_deq
+        enq_ptr.CE @= m.enable(do_enq)
+        deq_ptr.CE @= m.enable(do_deq)
 
-        maybe_full.I @= do_enq
+        maybe_full.I @= m.enable(do_enq)
         maybe_full.CE @= m.enable(do_enq != do_deq)
         self.io.deq.data @= ram[deq_ptr.O]
 
@@ -140,7 +140,7 @@ class GoldCache(m.Generator2):
         write_counter = mantle.CounterModM(counter_m,
                                            max(counter_m.bit_length(), 1),
                                            has_ce=True)
-        write_counter.CE @= m.enable(state.O == State.WRITE &
+        write_counter.CE @= m.enable((state.O == State.WRITE) &
                                      self.io.nasti.r.valid)
         w_cnt, w_done = write_counter.O, write_counter.COUT
 
@@ -427,8 +427,8 @@ def test_cache():
         dut.cpu.req.valid @= state.O == TestState.WAIT
         dut.cpu.abort @= 0
         gold_req.data @= dut.cpu.req.data.value()
-        gold_req.valid @= state == TestState.START
-        gold_resp.ready @= state == TestState.DONE
+        gold_req.valid @= state.O == TestState.START
+        gold_resp.ready @= state.O == TestState.DONE
 
         mem_waddr1 @= m.mux(init_addr, init_counter.O)[:20]
         mem_wdata1 @= m.mux(init_data, init_counter.O)
@@ -461,7 +461,10 @@ def test_cache():
         f.assert_immediate(~check_resp_data | (dut.cpu.resp.data.data ==
                                                gold_resp.data.data))
         m.display("test_state=%x", state.O).when(m.posedge(io.CLK))
-        m.display("dut valid = %x, gold valid = %x", dut.cpu.resp.valid,
+        m.display("dut req valid = %x", dut.cpu.req.valid).when(m.posedge(io.CLK))
+        m.display("gold req valid = %x, ready = %x", gold_req.valid,
+                  gold_req.ready).when(m.posedge(io.CLK))
+        m.display("dut resp valid = %x, gold resp valid = %x", dut.cpu.resp.valid,
                   gold_resp.valid).when(m.posedge(io.CLK))
         m.display("%x ?= %x", dut.cpu.resp.data.data,
                   gold_resp.data.data).when(m.posedge(io.CLK)).if_(check_resp_data)
