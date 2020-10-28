@@ -299,7 +299,7 @@ def test_cache():
         dut_mem.r.data @= NastiReadDataChannel(
             nasti_params, 0,
             mem.read(
-                ((gold_mem.ar.data.addr >> size) +
+                ((gold_mem.ar.data.addr) +
                  m.zext_to(read_counter.O, nasti_params.x_addr_bits))[:20]),
             read_counter.COUT)
         gold_mem.ar.ready @= dut_mem.ar.ready
@@ -321,7 +321,7 @@ def test_cache():
                 mem_wdata1
             ], mem_wen1),
             m.mux([
-                ((dut_mem.aw.data.addr >> size) +
+                ((dut_mem.aw.data.addr) +
                  m.zext_to(write_counter.O, nasti_params.x_addr_bits))[:20],
                 mem_waddr1
             ], mem_wen1),
@@ -520,7 +520,10 @@ def test_cache():
 
         f.assert_immediate((state.O != TestState.WAIT) | (timeout.O < 100))
         f.assert_immediate(~check_resp_data | (dut.cpu.resp.data.data ==
-                                               gold_resp.data.data))
+                                               gold_resp.data.data),
+                           failure_msg=("dut.cpu.resp.data.data => %x != %x",
+                                        dut.cpu.resp.data.data,
+                                        gold_resp.data.data))
         # m.display("mem_state=%x", mem_state.O).when(m.posedge(io.CLK))
         # m.display("test_state=%x", state.O).when(m.posedge(io.CLK))
         # m.display("dut req valid = %x",
