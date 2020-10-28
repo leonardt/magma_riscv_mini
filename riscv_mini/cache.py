@@ -138,15 +138,14 @@ class Cache(m.Generator2):
         # Counters
         assert data_beats > 0
         if data_beats > 1:
-            counter_m = data_beats - 1
-            read_counter = mantle.CounterModM(counter_m,
-                                              max(counter_m.bit_length(), 1),
+            read_counter = mantle.CounterModM(data_beats,
+                                              max(data_beats.bit_length(), 1),
                                               has_ce=True)
             read_counter.CE @= m.enable(self.io.nasti.r.fired())
             read_count, read_wrap_out = read_counter.O, read_counter.COUT
 
-            write_counter = mantle.CounterModM(counter_m,
-                                               max(counter_m.bit_length(), 1),
+            write_counter = mantle.CounterModM(data_beats,
+                                               max(data_beats.bit_length(), 1),
                                                has_ce=True)
             write_count, write_wrap_out = write_counter.O, write_counter.COUT
         else:
@@ -162,7 +161,7 @@ class Cache(m.Generator2):
         else:
             refill_buf.I @= m.set_index(refill_buf.O,
                                         self.io.nasti.r.data.data,
-                                        read_count)
+                                        read_count[:-1])
         refill_buf.CE @= m.enable(self.io.nasti.r.fired())
 
         is_idle = state.O == State.IDLE
@@ -183,9 +182,7 @@ class Cache(m.Generator2):
         off_reg = addr_reg.O[byte_offset_bits:b_len]
 
         rmeta = meta_mem.read(idx, ren)
-        rdata = m.concat(*reversed(
-            tuple(mem.read(idx, ren) for mem in data_mem)
-        ))
+        rdata = m.concat(*(mem.read(idx, ren) for mem in data_mem))
         rdata_buf = m.Register(type(rdata), has_enable=True)()(rdata,
                                                                CE=ren_reg)
 
@@ -203,8 +200,8 @@ class Cache(m.Generator2):
         self.io.cpu.resp.data.data @= m.array(
             [read[i * x_len:(i + 1) * x_len] for i in range(n_words)]
         )[off_reg]
-        self.io.cpu.resp.valid @= (is_idle | (is_read & hit) |
-                                   (is_alloc_reg & ~cpu_mask.O.reduce_or()))
+        self.io.cpu.resp.valid @= (is_idle | is_read & hit | is_alloc_reg &
+                                   ~cpu_mask.O.reduce_or())
 
         addr_reg.I @= addr
         addr_reg.CE @= m.enable(self.io.cpu.resp.valid.value())
@@ -218,8 +215,8 @@ class Cache(m.Generator2):
         wmeta = MetaData(name="wmeta")
         wmeta.tag @= tag_reg
 
-        offset_mask = cpu_mask.O << m.concat(off_reg,
-                                             m.bits(0, byte_offset_bits))
+        offset_mask = cpu_mask.O << m.concat(m.bits(0, byte_offset_bits),
+                                             off_reg)
         wmask = m.mux([
             m.zext_to(offset_mask, w_bytes * 8),
             m.SInt[w_bytes * 8](-1)
@@ -229,12 +226,12 @@ class Cache(m.Generator2):
             wdata_alloc = self.io.nasti.r.data.data
         else:
             wdata_alloc = m.concat(
-                self.io.nasti.r.data.data,
                 # TODO: not sure why they use `init.reverse`
                 # https://github.com/ucb-bar/riscv-mini/blob/release/src/main/scala/Cache.scala#L116
                 # TODO: Needed to drop first index here to match type with
                 # other mux input?
-                m.concat(*reversed(refill_buf.O[1:]))
+                m.concat(*refill_buf.O[1:]),
+                self.io.nasti.r.data.data
             )
         wdata = m.mux([
             wdata_alloc,
@@ -253,13 +250,13 @@ class Cache(m.Generator2):
             mem.write(m.array(data), idx_reg,
                       wmask[i * w_bytes: (i + 1) * w_bytes], m.enable(wen))
 
-        tag_and_idx = m.zext_to(m.concat(tag_reg, idx_reg),
+        tag_and_idx = m.zext_to(m.concat(idx_reg, tag_reg),
                                 nasti_params.x_addr_bits)
         self.io.nasti.ar.data @= NastiReadAddressChannel(
             nasti_params, 0, tag_and_idx << m.Bits[len(tag_and_idx)](b_len),
             m.bitutils.clog2(nasti_params.x_data_bits // 8), data_beats - 1)
 
-        rmeta_and_idx = m.zext_to(m.concat(rmeta.tag, idx_reg),
+        rmeta_and_idx = m.zext_to(m.concat(idx_reg, rmeta.tag),
                                   nasti_params.x_addr_bits)
         self.io.nasti.aw.data @= NastiWriteAddressChannel(
             nasti_params, 0, rmeta_and_idx <<
@@ -272,7 +269,7 @@ class Cache(m.Generator2):
                 [read[i * nasti_params.x_data_bits:
                       (i + 1) * nasti_params.x_data_bits]
                  for i in range(data_beats)]
-            )[write_count],
+            )[write_count[:-1]],
             None, write_wrap_out
         )
 
@@ -325,7 +322,7 @@ class Cache(m.Generator2):
                     ar_valid @= ~is_dirty
                     if self.io.nasti.aw.fired():
                         state.I @= State.WRITE_BACK
-                    else:
+                    elif self.io.nasti.ar.fired():
                         state.I @= State.REFILL
             elif state.O == State.WRITE_BACK:
                 self.io.nasti.w.valid @= True

@@ -24,10 +24,9 @@ class Queue(m.Generator2):
         ) + m.ClockIO()
 
         ram = m.Memory(entries, T)()
-        counter_m = entries - 1
-        enq_ptr = mantle.CounterModM(counter_m, counter_m.bit_length(),
+        enq_ptr = mantle.CounterModM(entries, entries.bit_length(),
                                      has_ce=True)
-        deq_ptr = mantle.CounterModM(counter_m, counter_m.bit_length(),
+        deq_ptr = mantle.CounterModM(entries, entries.bit_length(),
                                      has_ce=True)
         maybe_full = m.Register(init=False, has_enable=True)()
 
@@ -41,14 +40,14 @@ class Queue(m.Generator2):
         do_enq = self.io.enq.fired()
         do_deq = self.io.deq.fired()
 
-        ram.write(self.io.enq.data, enq_ptr.O, m.enable(do_enq))
+        ram.write(self.io.enq.data, enq_ptr.O[:-1], m.enable(do_enq))
 
         enq_ptr.CE @= m.enable(do_enq)
         deq_ptr.CE @= m.enable(do_deq)
 
         maybe_full.I @= m.enable(do_enq)
         maybe_full.CE @= m.enable(do_enq != do_deq)
-        self.io.deq.data @= ram[deq_ptr.O]
+        self.io.deq.data @= ram[deq_ptr.O[:-1]]
 
         if flow:
             raise NotImplementedError()
@@ -125,24 +124,23 @@ class GoldCache(m.Generator2):
         class State(m.Enum):
             IDLE = 0
             WRITE = 1
-            WRITE_ACK = 1
-            READ = 1
+            WRITE_ACK = 2
+            READ = 3
 
         state = m.Register(init=State.IDLE)()
 
-        counter_m = data_beats - 1
-        read_counter = mantle.CounterModM(counter_m,
-                                          max(counter_m.bit_length(), 1),
-                                          has_ce=True)
-        read_counter.CE @= m.enable(state.O == State.READ)
-        r_cnt, r_done = read_counter.O, read_counter.COUT
-
-        write_counter = mantle.CounterModM(counter_m,
-                                           max(counter_m.bit_length(), 1),
+        write_counter = mantle.CounterModM(data_beats,
+                                           max(data_beats.bit_length(), 1),
                                            has_ce=True)
-        write_counter.CE @= m.enable((state.O == State.WRITE) &
-                                     self.io.nasti.r.valid)
+        write_counter.CE @= m.enable(state.O == State.WRITE)
         w_cnt, w_done = write_counter.O, write_counter.COUT
+
+        read_counter = mantle.CounterModM(data_beats,
+                                          max(data_beats.bit_length(), 1),
+                                          has_ce=True)
+        read_counter.CE @= m.enable((state.O == State.READ) &
+                                    self.io.nasti.r.valid)
+        r_cnt, r_done = read_counter.O, read_counter.COUT
 
         self.io.resp.data.data @= (read >> m.zext_to((off // 4) * x_len,
                                                      b_bits))[:x_len]
@@ -151,7 +149,8 @@ class GoldCache(m.Generator2):
         tags_rdata = tags.read(idx)
         self.io.nasti.aw.data @= NastiWriteAddressChannel(
             nasti_params, 0,
-            m.bits(m.concat(tags_rdata, idx), 32) << b_len, size, length)
+            # m.bits(m.concat(tags_rdata, idx), 32) << b_len, size, length)
+            m.bits(m.concat(idx, tags_rdata), 32) << b_len, size, length)
         self.io.nasti.w.data @= NastiWriteDataChannel(
             nasti_params,
             (read >> (m.zext_to(w_cnt, b_bits) *
@@ -167,6 +166,7 @@ class GoldCache(m.Generator2):
         data_wen = m.Bit(name="data_wen")
         data_wdata = m.UInt[b_bits](name="data_wdata")
         data.write(data_wdata, idx, m.enable(data_wen))
+        # m.display("data_wdata=%x", data_wdata).when(m.posedge(self.io.CLK))
 
         v_wen = m.Bit(name="v_wen")
         v.write(True, idx, m.enable(v_wen))
@@ -177,6 +177,14 @@ class GoldCache(m.Generator2):
 
         d_rdata = d.read(idx)
 
+        # m.display("gold_state=%x", state.O).when(m.posedge(self.io.CLK))
+        # m.display("gold_w_done=%x", w_done).when(m.posedge(self.io.CLK))
+        # m.display("gold_b_valid=%x", self.io.nasti.b.valid).when(m.posedge(self.io.CLK))
+        m.display("[cache] data[%x] <= %x, off: %x, req: %x, mask: %b", idx,
+                  write, off, self.io.req.data.data, self.io.req.data.mask).when(m.posedge(self.io.CLK)).if_((state.O == State.IDLE) & (self.io.req.valid & self.io.resp.ready) & (v_rdata & (tags_rdata == tag)) & req.mask.reduce_or())
+
+        m.display("[cache] data[%x] => %x, off: %x, resp: %x", idx,
+                  write, off, self.io.resp.data.data.value()).when(m.posedge(self.io.CLK)).if_((state.O == State.IDLE) & (self.io.req.valid & self.io.resp.ready) & (v_rdata & (tags_rdata == tag)) & ~req.mask.reduce_or())
         @m.inline_combinational()
         def logic():
             self.io.resp.valid @= False
@@ -215,6 +223,7 @@ class GoldCache(m.Generator2):
                 if self.io.nasti.b.valid:
                     data_wdata @= 0
                     data_wen @= True
+                    self.io.nasti.ar.valid @= True
                     state.I @= State.READ
             elif state.O == State.READ:
                 if self.io.nasti.r.valid:
@@ -264,7 +273,6 @@ def test_cache():
         size = m.bitutils.clog2(nasti_params.x_data_bits // 8)
         b_bits = b_bytes << 3
         data_beats = b_bits // nasti_params.x_data_bits
-        length = data_beats - 1
 
         mem = m.Memory(1 << 20, m.UInt[nasti_params.x_data_bits])()
 
@@ -276,11 +284,11 @@ def test_cache():
 
         mem_state = m.Register(init=MemState.IDLE)()
 
-        write_counter = mantle.CounterModM(length, length.bit_length(),
+        write_counter = mantle.CounterModM(data_beats, data_beats.bit_length(),
                                            has_ce=True)
         write_counter.CE @= m.enable((mem_state.O == MemState.WRITE) &
                                      dut_mem.w.valid & gold_mem.w.valid)
-        read_counter = mantle.CounterModM(length, length.bit_length(),
+        read_counter = mantle.CounterModM(data_beats, data_beats.bit_length(),
                                           has_ce=True)
         read_counter.CE @= m.enable((mem_state.O == MemState.READ) &
                                     dut_mem.r.ready & gold_mem.r.ready)
@@ -318,6 +326,37 @@ def test_cache():
                 mem_waddr1
             ], mem_wen1),
             m.enable(mem_wen0 | mem_wen1))
+        # m.display("mem_wen0 = %x, mem_wen1 = %x", mem_wen0,
+        #           mem_wen1).when(m.posedge(io.CLK))
+        # m.display("dut_mem.w.valid = %x",
+        #           dut_mem.w.valid).when(m.posedge(io.CLK))
+        # m.display("gold_mem.w.valid = %x",
+        #           gold_mem.w.valid).when(m.posedge(io.CLK))
+
+        f.assert_immediate(
+            (mem_state.O != MemState.IDLE) |
+            ~(gold_mem.aw.valid & dut_mem.aw.valid) |
+            (dut_mem.aw.data.addr == gold_mem.aw.data.addr),
+            failure_msg=(
+                "[dut_mem.aw.data.addr] %x != [gold_mem.aw.data.addr] %x",
+                dut_mem.aw.data.addr, gold_mem.aw.data.addr))
+
+        f.assert_immediate(
+            (mem_state.O != MemState.IDLE) |
+            ~(gold_mem.aw.valid & dut_mem.aw.valid) |
+            ~(gold_mem.ar.valid & dut_mem.ar.valid) |
+            (dut_mem.ar.data.addr == gold_mem.ar.data.addr),
+            failure_msg=(
+                "[dut_mem.ar.data.addr] %x != [gold_mem.ar.data.addr] %x",
+                dut_mem.ar.data.addr, gold_mem.ar.data.addr))
+
+        f.assert_immediate(
+            (mem_state.O != MemState.WRITE) |
+            ~(gold_mem.w.valid & dut_mem.w.valid) |
+            (dut_mem.w.data.data == gold_mem.w.data.data),
+            failure_msg=(
+                "[dut_mem.w.data.data] %x != [gold_mem.w.data.data] %x",
+                dut_mem.w.data.data, gold_mem.w.data.data))
 
         @m.inline_combinational()
         def mem_fsm():
@@ -349,50 +388,68 @@ def test_cache():
                     dut_mem.ar.ready @= True
                     mem_state.I @= MemState.IDLE
 
-        rand_tag = BitVector.random(t_len)
-        rand_idx = BitVector.random(s_len)
-        rand_off = BitVector.random(b_len) & -4
-        rand_data = BitVector[nasti_params.x_data_bits](0)
-        for i in range(nasti_params.x_data_bits // 8):
-            rand_data |= BitVector[nasti_params.x_data_bits](
-                random.randint(0, 0xff) << (8 * i)
-            )
-        rand_mask = BitVector[x_len // 8](
-            random.randint(1, (1 << (x_len // 8)) - 2)
-        )
+        # m.display("[write] mem[%x] <= %x", (dut_mem.aw.data.addr >> size) +
+        m.display("[write] mem[%x] <= %x", mem.WADDR.value(),
+                  dut_mem.w.data.data).when(m.posedge(io.CLK)).if_(mem_wen0)
+        # m.display("[read] mem[%x] => %x", (dut_mem.ar.data.addr >> size) +
+        m.display("[read] mem[%x] => %x", mem.RADDR.value(),
+                  dut_mem.r.data.data).when(m.posedge(io.CLK)).if_(
+                      (mem_state.O == MemState.READ) & dut_mem.r.ready &
+                      gold_mem.r.ready)
 
-        def test(test_data, tag, idx, off, mask=BitVector[x_len // 8](0)):
-            return mask.concat(test_data).concat(tag).concat(idx).concat(off)
+        def rand_data(nasti_params):
+            rand_data = BitVector[nasti_params.x_data_bits](0)
+            for i in range(nasti_params.x_data_bits // 8):
+                rand_data |= BitVector[nasti_params.x_data_bits](
+                    random.randint(0, 0xff) << (8 * i)
+                )
+            return rand_data
 
-        tags = [rand_tag] * 3
-        idxs = [rand_idx] * 2
-        offs = [rand_off] * 6
+        def rand_mask(x_len):
+            return BitVector[x_len // 8](
+                random.randint(1, (1 << (x_len // 8)) - 2))
+
+        def test(rand_data, nasti_params, b_bits, tag, idx, off,
+                 mask=BitVector[x_len // 8](0)):
+            test_data = rand_data(nasti_params)
+            for i in range((b_bits // nasti_params.x_data_bits) - 1):
+                test_data = test_data.concat(rand_data(nasti_params))
+            # return m.uint(m.concat(mask, test_data, tag, idx, off))
+            return m.uint(m.concat(off, idx, tag, test_data, mask))
+
+        tags = []
+        for _ in range(3):
+            tags.append(BitVector.random(t_len))
+        idxs = []
+        for _ in range(2):
+            idxs.append(BitVector.random(s_len))
+        offs = []
+        for _ in range(6):
+            offs.append(BitVector.random(b_len) & -4)
 
         init_addr = []
         _iter = itertools.product(tags, idxs, range(0, data_beats))
+        init_data = []
         for tag, idx, off in _iter:
-            init_addr.append(tag.concat(idx).concat(BitVector[b_len](off)))
-        init_data = [rand_data] * len(init_addr)
-
-        test_data = rand_data
-        for i in range((b_bits // nasti_params.x_data_bits) - 1):
-            test_data = test_data.concat(rand_data)
+            # init_addr.append(m.uint(m.concat(tag, idx, BitVector[b_len](off))))
+            init_addr.append(m.uint(m.concat(BitVector[b_len](off), idx, tag)))
+            init_data.append(rand_data(nasti_params))
         test_vec = [
-            test(test_data, tags[0], idxs[0], offs[0]),  # 0: read miss
-            test(test_data, tags[0], idxs[0], offs[1]),  # 1: read hit
-            test(test_data, tags[1], idxs[0], offs[0]),  # 2: read miss
-            test(test_data, tags[1], idxs[0], offs[2]),  # 3: read hit
-            test(test_data, tags[1], idxs[0], offs[3]),  # 4: read hit
-            test(test_data, tags[1], idxs[0], offs[4], rand_mask),  # 5: write hit  # noqa
-            test(test_data, tags[1], idxs[0], offs[4]),  # 6: read hit
-            test(test_data, tags[2], idxs[0], offs[5]),  # 7: read miss & write back  # noqa
-            test(test_data, tags[0], idxs[1], offs[0], rand_mask),  # 8: write miss  # noqa
-            test(test_data, tags[0], idxs[1], offs[0]),  # 9: read hit
-            test(test_data, tags[0], idxs[1], offs[1]),  # 10: read hit
-            test(test_data, tags[1], idxs[1], offs[2], rand_mask),  # 11: write miss & write back  # noqa
-            test(test_data, tags[1], idxs[1], offs[3]),  # 12: read hit
-            test(test_data, tags[2], idxs[1], offs[4]),  # 13: read write back
-            test(test_data, tags[2], idxs[1], offs[5])  # 14: read hit
+            test(rand_data, nasti_params, b_bits, tags[0], idxs[0], offs[0]),  # 0: read miss
+            test(rand_data, nasti_params, b_bits, tags[0], idxs[0], offs[1]),  # 1: read hit
+            test(rand_data, nasti_params, b_bits, tags[1], idxs[0], offs[0]),  # 2: read miss
+            test(rand_data, nasti_params, b_bits, tags[1], idxs[0], offs[2]),  # 3: read hit
+            test(rand_data, nasti_params, b_bits, tags[1], idxs[0], offs[3]),  # 4: read hit
+            test(rand_data, nasti_params, b_bits, tags[1], idxs[0], offs[4], rand_mask(x_len)),  # 5: write hit  # noqa
+            test(rand_data, nasti_params, b_bits, tags[1], idxs[0], offs[4]),  # 6: read hit
+            test(rand_data, nasti_params, b_bits, tags[2], idxs[0], offs[5]),  # 7: read miss & write back  # noqa
+            test(rand_data, nasti_params, b_bits, tags[0], idxs[1], offs[0], rand_mask(x_len)),  # 8: write miss  # noqa
+            test(rand_data, nasti_params, b_bits, tags[0], idxs[1], offs[0]),  # 9: read hit
+            test(rand_data, nasti_params, b_bits, tags[0], idxs[1], offs[1]),  # 10: read hit
+            test(rand_data, nasti_params, b_bits, tags[1], idxs[1], offs[2], rand_mask(x_len)),  # 11: write miss & write back  # noqa
+            test(rand_data, nasti_params, b_bits, tags[1], idxs[1], offs[3]),  # 12: read hit
+            test(rand_data, nasti_params, b_bits, tags[2], idxs[1], offs[4]),  # 13: read write back
+            test(rand_data, nasti_params, b_bits, tags[2], idxs[1], offs[5])  # 14: read hit
         ]
 
         class TestState(m.Enum):
@@ -419,7 +476,8 @@ def test_cache():
         idx = (curr_vec >> b_len)[:s_len]
         off = curr_vec[:b_len]
 
-        dut.cpu.req.data.addr @= m.concat(tag, idx, off)
+        # dut.cpu.req.data.addr @= m.concat(tag, idx, off)
+        dut.cpu.req.data.addr @= m.concat(off, idx, tag)
         # TODO: Is truncating this fine?
         req_data = data[:x_len]
         dut.cpu.req.data.data @= req_data
@@ -434,6 +492,8 @@ def test_cache():
         mem_wdata1 @= m.mux(init_data, init_counter.O)
 
         check_resp_data = m.Bit()
+        m.display("[init] mem[%x] <= %x",
+                  mem_waddr1, mem_wdata1).when(m.posedge(io.CLK)).if_(state.O == TestState.INIT)
 
         @m.inline_combinational()
         def state_fsm():
@@ -461,16 +521,14 @@ def test_cache():
         f.assert_immediate((state.O != TestState.WAIT) | (timeout.O < 100))
         f.assert_immediate(~check_resp_data | (dut.cpu.resp.data.data ==
                                                gold_resp.data.data))
-        m.display("test_state=%x", state.O).when(m.posedge(io.CLK))
-        m.display("dut req valid = %x",
-                  dut.cpu.req.valid).when(m.posedge(io.CLK))
-        m.display("gold req valid = %x, ready = %x", gold_req.valid,
-                  gold_req.ready).when(m.posedge(io.CLK))
-        m.display("dut resp valid = %x, gold resp valid = %x",
-                  dut.cpu.resp.valid, gold_resp.valid).when(m.posedge(io.CLK))
-        m.display("%x ?= %x", dut.cpu.resp.data.data,
-                  gold_resp.data.data).when(m.posedge(io.CLK))\
-            .if_(check_resp_data)
+        # m.display("mem_state=%x", mem_state.O).when(m.posedge(io.CLK))
+        # m.display("test_state=%x", state.O).when(m.posedge(io.CLK))
+        # m.display("dut req valid = %x",
+        #           dut.cpu.req.valid).when(m.posedge(io.CLK))
+        # m.display("gold req valid = %x, ready = %x", gold_req.valid,
+        #           gold_req.ready).when(m.posedge(io.CLK))
+        # m.display("dut resp valid = %x, gold resp valid = %x",
+        #           dut.cpu.resp.valid, gold_resp.valid).when(m.posedge(io.CLK))
         io.done @= test_counter.COUT
 
     tester = f.Tester(DUT, DUT.CLK)
