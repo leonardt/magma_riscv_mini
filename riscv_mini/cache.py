@@ -168,12 +168,14 @@ class Cache(m.Generator2):
         is_read = state.O == State.READ_CACHE
         is_write = state.O == State.WRITE_CACHE
         is_alloc = (state.O == State.REFILL) & read_wrap_out
-        # m.display("[%0t]: is_alloc = %x", m.time(), is_alloc).when(m.posedge(self.io.CLK))
+        # m.display("[%0t]: is_alloc = %x", m.time(), is_alloc)\
+        #     .when(m.posedge(self.io.CLK))
         is_alloc_reg = m.Register(m.Bit)()(is_alloc)
 
         hit = m.Bit(name="hit")
         wen = is_write & (hit | is_alloc_reg) & ~self.io.cpu.abort | is_alloc
-        # m.display("[%0t]: wen = %x", m.time(), wen).when(m.posedge(self.io.CLK))
+        # m.display("[%0t]: wen = %x", m.time(), wen)\
+        #     .when(m.posedge(self.io.CLK))
         ren = m.enable(~wen & (is_idle | is_read) & self.io.cpu.req.valid)
         ren_reg = m.enable(m.Register(m.Bit)()(ren))
 
@@ -195,7 +197,8 @@ class Cache(m.Generator2):
             ], ren_reg)),
             m.as_bits(refill_buf.O)
         ], is_alloc_reg)
-        # m.display("is_alloc_reg=%x", is_alloc_reg).when(m.posedge(self.io.CLK))
+        # m.display("is_alloc_reg=%x", is_alloc_reg)\
+        #     .when(m.posedge(self.io.CLK))
 
         hit @= v.O[idx_reg] & (rmeta.tag == tag_reg)
 
@@ -203,13 +206,23 @@ class Cache(m.Generator2):
         self.io.cpu.resp.data.data @= m.array(
             [read[i * x_len:(i + 1) * x_len] for i in range(n_words)]
         )[off_reg]
-        self.io.cpu.resp.valid @= (is_idle | (is_read & hit) | (is_alloc_reg &
-                                                                ~cpu_mask.O.reduce_or()))
-        # m.display("resp.valid=%x", self.io.cpu.resp.valid.value()).when(m.posedge(self.io.CLK))
-        # m.display("[%0t]: valid = %x", m.time(), self.io.cpu.resp.valid.value()).when(m.posedge(self.io.CLK))
-        # m.display("[%0t]: is_idle = %x, is_read = %x, hit = %x, is_alloc_reg = %x, ~cpu_mask.O.reduce_or() = %x",m.time(), is_idle, is_read, hit, is_alloc_reg, ~cpu_mask.O.reduce_or()).when(m.posedge(self.io.CLK))
-        # m.display("[%0t]: refill_buf.O=%x, %x", m.time(), *refill_buf.O).when(m.posedge(self.io.CLK)).if_(self.io.cpu.resp.valid.value() & is_alloc_reg)
-        # m.display("[%0t]: read=%x", m.time(), read).when(m.posedge(self.io.CLK)).if_(self.io.cpu.resp.valid.value() & is_alloc_reg)
+        self.io.cpu.resp.valid @= (is_idle | (is_read & hit) |
+                                   (is_alloc_reg & ~cpu_mask.O.reduce_or()))
+        m.display("resp.valid=%x", self.io.cpu.resp.valid.value())\
+            .when(m.posedge(self.io.CLK))
+        m.display("[%0t]: valid = %x", m.time(),
+                  self.io.cpu.resp.valid.value())\
+            .when(m.posedge(self.io.CLK))
+        m.display("[%0t]: is_idle = %x, is_read = %x, hit = %x, is_alloc_reg = "
+                  "%x, ~cpu_mask.O.reduce_or() = %x", m.time(), is_idle,
+                  is_read, hit, is_alloc_reg, ~cpu_mask.O.reduce_or())\
+            .when(m.posedge(self.io.CLK))
+        m.display("[%0t]: refill_buf.O=%x, %x", m.time(), *refill_buf.O)\
+            .when(m.posedge(self.io.CLK))\
+            .if_(self.io.cpu.resp.valid.value() & is_alloc_reg)
+        m.display("[%0t]: read=%x", m.time(), read)\
+            .when(m.posedge(self.io.CLK))\
+            .if_(self.io.cpu.resp.valid.value() & is_alloc_reg)
 
         addr_reg.I @= addr
         addr_reg.CE @= m.enable(self.io.cpu.resp.valid.value())

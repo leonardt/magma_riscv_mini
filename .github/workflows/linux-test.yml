@@ -32,4 +32,4 @@ jobs:
     - name: Pytest
       shell: bash -l {0}
       run: |
-        pytest --pycodestyle -x tests/
+        pytest --pycodestyle tests/ riscv_mini/

@@ -2,7 +2,6 @@ import itertools
 import random
 from hwtypes import BitVector
 import magma as m
-# m.config.set_debug_mode(True)
 import mantle
 import fault as f
 
@@ -142,7 +141,8 @@ class GoldCache(m.Generator2):
                                     self.io.nasti.r.valid)
         r_cnt, r_done = read_counter.O, read_counter.COUT
 
-        self.io.resp.data.data @= (read >> (m.zext_to((off // 4), b_bits) * x_len))[:x_len]
+        self.io.resp.data.data @= (read >> (m.zext_to((off // 4), b_bits) *
+                                            x_len))[:x_len]
         self.io.nasti.ar.data @= NastiReadAddressChannel(
             nasti_params, 0, (req.addr >> b_len) << b_len, size, length)
         tags_rdata = tags.read(idx)
@@ -178,12 +178,24 @@ class GoldCache(m.Generator2):
 
         # m.display("gold_state=%x", state.O).when(m.posedge(self.io.CLK))
         # m.display("gold_w_done=%x", w_done).when(m.posedge(self.io.CLK))
-        # m.display("gold_b_valid=%x", self.io.nasti.b.valid).when(m.posedge(self.io.CLK))
-        m.display("[%0t] [cache] data[%x] <= %x, off: %x, req: %x, mask: %b", m.time(), idx,
-                  write, off, self.io.req.data.data, self.io.req.data.mask).when(m.posedge(self.io.CLK)).if_((state.O == State.IDLE) & (self.io.req.valid & self.io.resp.ready) & (v_rdata & (tags_rdata == tag)) & req.mask.reduce_or())
+        # m.display("gold_b_valid=%x",
+        #           self.io.nasti.b.valid).when(m.posedge(self.io.CLK))
 
-        m.display("[%0t] [cache] data[%x] => %x, off: %x, resp: %x", m.time(), idx,
-                  write, off, self.io.resp.data.data.value()).when(m.posedge(self.io.CLK)).if_((state.O == State.IDLE) & (self.io.req.valid & self.io.resp.ready) & (v_rdata & (tags_rdata == tag)) & ~req.mask.reduce_or())
+        m.display("[%0t] [cache] data[%x] <= %x, off: %x, req: %x, mask: %b",
+                  m.time(), idx, write, off, self.io.req.data.data,
+                  self.io.req.data.mask)\
+            .when(m.posedge(self.io.CLK))\
+            .if_((state.O == State.IDLE) &
+                 (self.io.req.valid & self.io.resp.ready) &
+                 (v_rdata & (tags_rdata == tag)) & req.mask.reduce_or())
+
+        m.display("[%0t] [cache] data[%x] => %x, off: %x, resp: %x", m.time(),
+                  idx, write, off, self.io.resp.data.data.value())\
+            .when(m.posedge(self.io.CLK))\
+            .if_((state.O == State.IDLE) &
+                 (self.io.req.valid & self.io.resp.ready) &
+                 (v_rdata & (tags_rdata == tag)) & ~req.mask.reduce_or())
+
         @m.inline_combinational()
         def logic():
             self.io.resp.valid @= False
@@ -390,10 +402,8 @@ def test_cache():
                     dut_mem.ar.ready @= True
                     mem_state.I @= MemState.IDLE
 
-        # m.display("[write] mem[%x] <= %x", (dut_mem.aw.data.addr >> size) +
         m.display("[%0t]: [write] mem[%x] <= %x", m.time(), mem.WADDR.value(),
                   dut_mem.w.data.data).when(m.posedge(io.CLK)).if_(mem_wen0)
-        # m.display("[read] mem[%x] => %x", (dut_mem.ar.data.addr >> size) +
         m.display("[%0t]: [read] mem[%x] => %x", m.time(), mem.RADDR.value(),
                   dut_mem.r.data.data).when(m.posedge(io.CLK)).if_(
                       (mem_state.O == MemState.READ) & dut_mem.r.ready &
@@ -411,12 +421,16 @@ def test_cache():
             return BitVector[x_len // 8](
                 random.randint(1, (1 << (x_len // 8)) - 2))
 
-        def test(rand_data, nasti_params, b_bits, tag, idx, off,
-                 mask=BitVector[x_len // 8](0)):
-            test_data = rand_data(nasti_params)
-            for i in range((b_bits // nasti_params.x_data_bits) - 1):
-                test_data = test_data.concat(rand_data(nasti_params))
-            return m.uint(m.concat(off, idx, tag, test_data, mask))
+        def make_test(rand_data, nasti_params, x_len):
+            # Wrapper because function definition in side class namespace
+            # doesn't inherit class variables
+            def test(b_bits, tag, idx, off, mask=BitVector[x_len // 8](0)):
+                test_data = rand_data(nasti_params)
+                for i in range((b_bits // nasti_params.x_data_bits) - 1):
+                    test_data = test_data.concat(rand_data(nasti_params))
+                return m.uint(m.concat(off, idx, tag, test_data, mask))
+            return test
+        test = make_test(rand_data, nasti_params, x_len)
 
         tags = []
         for _ in range(3):
@@ -429,27 +443,28 @@ def test_cache():
             offs.append(BitVector.random(b_len) & -4)
 
         init_addr = []
-        _iter = itertools.product(tags, idxs, range(0, data_beats))
         init_data = []
+        _iter = itertools.product(tags, idxs, range(0, data_beats))
         for tag, idx, off in _iter:
             init_addr.append(m.uint(m.concat(BitVector[b_len](off), idx, tag)))
             init_data.append(rand_data(nasti_params))
+
         test_vec = [
-            test(rand_data, nasti_params, b_bits, tags[0], idxs[0], offs[0]),  # 0: read miss
-            test(rand_data, nasti_params, b_bits, tags[0], idxs[0], offs[1]),  # 1: read hit
-            test(rand_data, nasti_params, b_bits, tags[1], idxs[0], offs[0]),  # 2: read miss
-            test(rand_data, nasti_params, b_bits, tags[1], idxs[0], offs[2]),  # 3: read hit
-            test(rand_data, nasti_params, b_bits, tags[1], idxs[0], offs[3]),  # 4: read hit
-            test(rand_data, nasti_params, b_bits, tags[1], idxs[0], offs[4], rand_mask(x_len)),  # 5: write hit  # noqa
-            test(rand_data, nasti_params, b_bits, tags[1], idxs[0], offs[4]),  # 6: read hit
-            test(rand_data, nasti_params, b_bits, tags[2], idxs[0], offs[5]),  # 7: read miss & write back  # noqa
-            test(rand_data, nasti_params, b_bits, tags[0], idxs[1], offs[0], rand_mask(x_len)),  # 8: write miss  # noqa
-            test(rand_data, nasti_params, b_bits, tags[0], idxs[1], offs[0]),  # 9: read hit
-            test(rand_data, nasti_params, b_bits, tags[0], idxs[1], offs[1]),  # 10: read hit
-            test(rand_data, nasti_params, b_bits, tags[1], idxs[1], offs[2], rand_mask(x_len)),  # 11: write miss & write back  # noqa
-            test(rand_data, nasti_params, b_bits, tags[1], idxs[1], offs[3]),  # 12: read hit
-            test(rand_data, nasti_params, b_bits, tags[2], idxs[1], offs[4]),  # 13: read write back
-            test(rand_data, nasti_params, b_bits, tags[2], idxs[1], offs[5])  # 14: read hit
+            test(b_bits, tags[0], idxs[0], offs[0]),  # 0: read miss
+            test(b_bits, tags[0], idxs[0], offs[1]),  # 1: read hit
+            test(b_bits, tags[1], idxs[0], offs[0]),  # 2: read miss
+            test(b_bits, tags[1], idxs[0], offs[2]),  # 3: read hit
+            test(b_bits, tags[1], idxs[0], offs[3]),  # 4: read hit
+            test(b_bits, tags[1], idxs[0], offs[4], rand_mask(x_len)),  # 5: write hit  # noqa
+            test(b_bits, tags[1], idxs[0], offs[4]),  # 6: read hit
+            test(b_bits, tags[2], idxs[0], offs[5]),  # 7: read miss & write back  # noqa
+            test(b_bits, tags[0], idxs[1], offs[0], rand_mask(x_len)),  # 8: write miss  # noqa
+            test(b_bits, tags[0], idxs[1], offs[0]),  # 9: read hit
+            test(b_bits, tags[0], idxs[1], offs[1]),  # 10: read hit
+            test(b_bits, tags[1], idxs[1], offs[2], rand_mask(x_len)),  # 11: write miss & write back  # noqa
+            test(b_bits, tags[1], idxs[1], offs[3]),  # 12: read hit
+            test(b_bits, tags[2], idxs[1], offs[4]),  # 13: read write back
+            test(b_bits, tags[2], idxs[1], offs[5])  # 14: read hit
         ]
 
         class TestState(m.Enum):
@@ -492,7 +507,9 @@ def test_cache():
 
         check_resp_data = m.Bit()
         m.display("[%0t]: [init] mem[%x] <= %x", m.time(),
-                  mem_waddr1, mem_wdata1).when(m.posedge(io.CLK)).if_(state.O == TestState.INIT)
+                  mem_waddr1, mem_wdata1)\
+            .when(m.posedge(io.CLK))\
+            .if_(state.O == TestState.INIT)
 
         @m.inline_combinational()
         def state_fsm():
@@ -531,12 +548,11 @@ def test_cache():
         # m.display("gold req valid = %x, ready = %x", gold_req.valid,
         #           gold_req.ready).when(m.posedge(io.CLK))
         # m.display("[%0t]: dut resp data = %x, gold resp data = %x", m.time(),
-        #           dut.cpu.resp.data.data, gold_resp.data.data).when(m.posedge(io.CLK))
+        #           dut.cpu.resp.data.data, gold_resp.data.data)\
+        #     .when(m.posedge(io.CLK))
         io.done @= test_counter.COUT
 
     tester = f.Tester(DUT, DUT.CLK)
-    # for i in range(100):
-    #     tester.step(2)
     tester.wait_until_high(DUT.done)
     tester.compile_and_run("verilator", magma_opts={"inline": True,
                                                     "verilator_compat": True},

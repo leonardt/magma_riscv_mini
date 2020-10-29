@@ -71,8 +71,10 @@ class CSRGen(m.Generator2):
         mhartid = BV[x_len](0)
 
         # interrupt enable stack
-        PRV = m.Register(m.UInt[len(CSR.PRV_M)], init=CSR.PRV_M, reset_type=m.ResetN)()
-        PRV1 = m.Register(m.UInt[len(CSR.PRV_M)], init=CSR.PRV_M, reset_type=m.ResetN)()
+        PRV = m.Register(m.UInt[len(CSR.PRV_M)], init=CSR.PRV_M,
+                         reset_type=m.ResetN)()
+        PRV1 = m.Register(m.UInt[len(CSR.PRV_M)], init=CSR.PRV_M,
+                          reset_type=m.ResetN)()
         PRV2 = BV[2](0)
         PRV3 = BV[2](0)
         IE = m.Register(m.Bit, init=False, reset_type=m.ResetN)()
@@ -90,7 +92,7 @@ class CSRGen(m.Generator2):
         XS = BV[2](0)
         FS = BV[2](0)
         SD = BV[1](0)
-        mstatus = m.concat(SD, BV[x_len-23](0), VM, MPRV, XS, FS, PRV3, IE3,
+        mstatus = m.concat(SD, BV[x_len - 23](0), VM, MPRV, XS, FS, PRV3, IE3,
                            PRV2, IE2, PRV1.O, IE1.O, PRV.O, IE.O)
         mtvec = BV[x_len](Const.PC_EVEC)
         mtdeleg = BV[x_len](0)
