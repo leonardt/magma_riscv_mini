@@ -193,6 +193,7 @@ class Cache(m.Generator2):
             ], ren_reg)),
             m.as_bits(refill_buf.O)
         ], is_alloc_reg)
+        # m.display("is_alloc_reg=%x", is_alloc_reg).when(m.posedge(self.io.CLK))
 
         hit @= v.O[idx_reg] & (rmeta.tag == tag_reg)
 
@@ -200,8 +201,13 @@ class Cache(m.Generator2):
         self.io.cpu.resp.data.data @= m.array(
             [read[i * x_len:(i + 1) * x_len] for i in range(n_words)]
         )[off_reg]
-        self.io.cpu.resp.valid @= (is_idle | is_read & hit | is_alloc_reg &
-                                   ~cpu_mask.O.reduce_or())
+        self.io.cpu.resp.valid @= (is_idle | (is_read & hit) | (is_alloc_reg &
+                                                                ~cpu_mask.O.reduce_or()))
+        # m.display("resp.valid=%x", self.io.cpu.resp.valid.value()).when(m.posedge(self.io.CLK))
+        m.display("[%0t]: valid = %x", m.time(), self.io.cpu.resp.valid.value()).when(m.posedge(self.io.CLK))
+        m.display("[%0t]: is_idle = %x, is_read = %x, hit = %x, is_alloc_reg = %x, ~cpu_mask.O.reduce_or() = %x",m.time(), is_idle, is_read, hit, is_alloc_reg, ~cpu_mask.O.reduce_or()).when(m.posedge(self.io.CLK))
+        m.display("[%0t]: refill_buf.O=%x, %x", m.time(), *refill_buf.O).when(m.posedge(self.io.CLK)).if_(self.io.cpu.resp.valid.value() & is_alloc_reg)
+        m.display("[%0t]: read=%x", m.time(), read).when(m.posedge(self.io.CLK)).if_(self.io.cpu.resp.valid.value() & is_alloc_reg)
 
         addr_reg.I @= addr
         addr_reg.CE @= m.enable(self.io.cpu.resp.valid.value())
@@ -218,8 +224,8 @@ class Cache(m.Generator2):
         offset_mask = cpu_mask.O << m.concat(m.bits(0, byte_offset_bits),
                                              off_reg)
         wmask = m.mux([
-            m.zext_to(offset_mask, w_bytes * 8),
-            m.SInt[w_bytes * 8](-1)
+            m.SInt[w_bytes * 8](-1),
+            m.zext_to(offset_mask, w_bytes * 8)
         ], ~is_alloc)
 
         if len(refill_buf.O) == 1:
@@ -230,12 +236,13 @@ class Cache(m.Generator2):
                 # https://github.com/ucb-bar/riscv-mini/blob/release/src/main/scala/Cache.scala#L116
                 # TODO: Needed to drop first index here to match type with
                 # other mux input?
-                m.concat(*refill_buf.O[1:]),
+                m.concat(*refill_buf.O),
                 self.io.nasti.r.data.data
             )
         wdata = m.mux([
             wdata_alloc,
-            m.as_bits(m.repeat(cpu_data.O, n_words))
+            m.zext_to(m.as_bits(m.repeat(cpu_data.O, n_words)),
+                      len(wdata_alloc))
         ], ~is_alloc)
 
         v.I @= m.set_index(v.O, m.bit(True), idx_reg)
