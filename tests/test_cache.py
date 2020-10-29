@@ -206,6 +206,7 @@ class GoldCache(m.Generator2):
                         if req.mask.reduce_or():
                             d_wen @= True
                             data_wdata @= write
+                            data_wen @= True
                         self.io.req.ready @= True
                         self.io.resp.valid @= True
                     else:
@@ -213,6 +214,8 @@ class GoldCache(m.Generator2):
                             self.io.nasti.aw.valid @= True
                             state.I @= State.WRITE
                         else:
+                            data_wdata @= 0
+                            data_wen @= True
                             self.io.nasti.ar.valid @= True
                             state.I @= State.READ
             elif state.O == State.WRITE:
@@ -527,8 +530,8 @@ def test_cache():
         #           dut.cpu.req.valid).when(m.posedge(io.CLK))
         # m.display("gold req valid = %x, ready = %x", gold_req.valid,
         #           gold_req.ready).when(m.posedge(io.CLK))
-        m.display("[%0t]: dut resp data = %x, gold resp data = %x", m.time(),
-                  dut.cpu.resp.data.data, gold_resp.data.data).when(m.posedge(io.CLK))
+        # m.display("[%0t]: dut resp data = %x, gold resp data = %x", m.time(),
+        #           dut.cpu.resp.data.data, gold_resp.data.data).when(m.posedge(io.CLK))
         io.done @= test_counter.COUT
 
     tester = f.Tester(DUT, DUT.CLK)

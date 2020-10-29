@@ -168,10 +168,12 @@ class Cache(m.Generator2):
         is_read = state.O == State.READ_CACHE
         is_write = state.O == State.WRITE_CACHE
         is_alloc = (state.O == State.REFILL) & read_wrap_out
+        # m.display("[%0t]: is_alloc = %x", m.time(), is_alloc).when(m.posedge(self.io.CLK))
         is_alloc_reg = m.Register(m.Bit)()(is_alloc)
 
         hit = m.Bit(name="hit")
         wen = is_write & (hit | is_alloc_reg) & ~self.io.cpu.abort | is_alloc
+        # m.display("[%0t]: wen = %x", m.time(), wen).when(m.posedge(self.io.CLK))
         ren = m.enable(~wen & (is_idle | is_read) & self.io.cpu.req.valid)
         ren_reg = m.enable(m.Register(m.Bit)()(ren))
 
@@ -204,10 +206,10 @@ class Cache(m.Generator2):
         self.io.cpu.resp.valid @= (is_idle | (is_read & hit) | (is_alloc_reg &
                                                                 ~cpu_mask.O.reduce_or()))
         # m.display("resp.valid=%x", self.io.cpu.resp.valid.value()).when(m.posedge(self.io.CLK))
-        m.display("[%0t]: valid = %x", m.time(), self.io.cpu.resp.valid.value()).when(m.posedge(self.io.CLK))
-        m.display("[%0t]: is_idle = %x, is_read = %x, hit = %x, is_alloc_reg = %x, ~cpu_mask.O.reduce_or() = %x",m.time(), is_idle, is_read, hit, is_alloc_reg, ~cpu_mask.O.reduce_or()).when(m.posedge(self.io.CLK))
-        m.display("[%0t]: refill_buf.O=%x, %x", m.time(), *refill_buf.O).when(m.posedge(self.io.CLK)).if_(self.io.cpu.resp.valid.value() & is_alloc_reg)
-        m.display("[%0t]: read=%x", m.time(), read).when(m.posedge(self.io.CLK)).if_(self.io.cpu.resp.valid.value() & is_alloc_reg)
+        # m.display("[%0t]: valid = %x", m.time(), self.io.cpu.resp.valid.value()).when(m.posedge(self.io.CLK))
+        # m.display("[%0t]: is_idle = %x, is_read = %x, hit = %x, is_alloc_reg = %x, ~cpu_mask.O.reduce_or() = %x",m.time(), is_idle, is_read, hit, is_alloc_reg, ~cpu_mask.O.reduce_or()).when(m.posedge(self.io.CLK))
+        # m.display("[%0t]: refill_buf.O=%x, %x", m.time(), *refill_buf.O).when(m.posedge(self.io.CLK)).if_(self.io.cpu.resp.valid.value() & is_alloc_reg)
+        # m.display("[%0t]: read=%x", m.time(), read).when(m.posedge(self.io.CLK)).if_(self.io.cpu.resp.valid.value() & is_alloc_reg)
 
         addr_reg.I @= addr
         addr_reg.CE @= m.enable(self.io.cpu.resp.valid.value())
@@ -221,11 +223,11 @@ class Cache(m.Generator2):
         wmeta = MetaData(name="wmeta")
         wmeta.tag @= tag_reg
 
-        offset_mask = cpu_mask.O << m.concat(m.bits(0, byte_offset_bits),
-                                             off_reg)
+        offset_mask = (m.zext_to(cpu_mask.O, w_bytes * 8) <<
+                       m.concat(m.bits(0, byte_offset_bits), off_reg))
         wmask = m.mux([
             m.SInt[w_bytes * 8](-1),
-            m.zext_to(offset_mask, w_bytes * 8)
+            offset_mask
         ], ~is_alloc)
 
         if len(refill_buf.O) == 1:
@@ -234,21 +236,22 @@ class Cache(m.Generator2):
             wdata_alloc = m.concat(
                 # TODO: not sure why they use `init.reverse`
                 # https://github.com/ucb-bar/riscv-mini/blob/release/src/main/scala/Cache.scala#L116
-                # TODO: Needed to drop first index here to match type with
-                # other mux input?
-                m.concat(*refill_buf.O),
+                m.concat(*refill_buf.O[:-1]),
                 self.io.nasti.r.data.data
             )
         wdata = m.mux([
             wdata_alloc,
-            m.zext_to(m.as_bits(m.repeat(cpu_data.O, n_words)),
-                      len(wdata_alloc))
+            m.as_bits(m.repeat(cpu_data.O, n_words))
         ], ~is_alloc)
 
         v.I @= m.set_index(v.O, m.bit(True), idx_reg)
         v.CE @= m.enable(wen)
         d.I @= m.set_index(d.O, ~is_alloc, idx_reg)
         d.CE @= m.enable(wen)
+        # m.display("[%0t]: refill_buf.O = %x", m.time(),
+        #           m.concat(*refill_buf.O)).when(m.posedge(self.io.CLK)).if_(wen)
+        # m.display("[%0t]: nasti.r.data.data = %x", m.time(),
+        #           self.io.nasti.r.data.data).when(m.posedge(self.io.CLK)).if_(wen)
 
         meta_mem.write(wmeta, idx_reg, m.enable(wen & is_alloc))
         for i, mem in enumerate(data_mem):
@@ -256,6 +259,10 @@ class Cache(m.Generator2):
                     for j in range(w_bytes)]
             mem.write(m.array(data), idx_reg,
                       wmask[i * w_bytes: (i + 1) * w_bytes], m.enable(wen))
+            # m.display("[%0t]: wdata = %x, %x, %x, %x", m.time(),
+            #           *mem.WDATA.value()).when(m.posedge(self.io.CLK)).if_(wen)
+            # m.display("[%0t]: wmask = %x, %x, %x, %x", m.time(),
+            #           *mem.WMASK.value()).when(m.posedge(self.io.CLK)).if_(wen)
 
         tag_and_idx = m.zext_to(m.concat(idx_reg, tag_reg),
                                 nasti_params.x_addr_bits)
