@@ -67,6 +67,8 @@ def test_csr():
             SYS(Funct3.CSRRC, 0, CSR.mfromhost, 0)
         ]
     )
+    # print(hex(int(rand_inst)))
+    # exit()
 
     n = len(insts)
     pc = [BV.random(x_len) for _ in range(n)]
@@ -92,7 +94,7 @@ def test_csr():
                 init = (1 << (ord('I') - ord('A')) |
                         1 << (ord('U') - ord('A')))
             elif reg == CSR.mstatus:
-                init = (CSR.PRV_M << 4) | (CSR.PRV_M << 1)
+                init = (CSR.PRV_M.ext(30) << 4) | (CSR.PRV_M.ext(30) << 1)
             elif reg == CSR.mtvec:
                 init = Const.PC_EVEC
             else:
@@ -157,15 +159,17 @@ def test_csr():
                      m.uint(prv))
         iaddr_invalid = m.mux(_iaddr_invalid, counter.O) & csr.pc_check.value()
         laddr_invalid = (
-            (m.mux(_haddr_invalid, counter.O) &
-             (csr.ld_type == Control.LD_LH)) |
-            (csr.ld_type == Control.LD_LHU) |
-            (m.mux(_waddr_invalid, counter.O) & (csr.ld_type == Control.LD_LW))
+            m.mux(_haddr_invalid, counter.O) &
+            ((ctrl.ld_type == Control.LD_LH) |
+             (ctrl.ld_type == Control.LD_LHU)) |
+            m.mux(_waddr_invalid, counter.O) &
+            (ctrl.ld_type == Control.LD_LW)
         )
         saddr_invalid = (
-            (m.mux(_haddr_invalid, counter.O) &
-             (csr.st_type == Control.ST_SH)) |
-            (m.mux(_waddr_invalid, counter.O) & (csr.st_type == Control.ST_SW))
+            m.mux(_haddr_invalid, counter.O) &
+            (ctrl.st_type == Control.ST_SH) |
+            m.mux(_waddr_invalid, counter.O) &
+            (ctrl.st_type == Control.ST_SW)
         )
         is_ecall = prv_inst & m.mux(_is_ecall, counter.O)
         is_ebreak = prv_inst & m.mux(_is_ebreak, counter.O)
@@ -280,20 +284,20 @@ def test_csr():
         # TODO: exception logic comes after since it has priority
         Cause = make_Cause(x_len)
         mcause = m.mux([
-            Cause.InstAddrMisaligned,
             m.mux([
-                Cause.LoadAddrMisaligned,
                 m.mux([
-                    Cause.StoreAddrMisaligned,
                     m.mux([
-                        Cause.Ecall + prv,
                         m.mux([
-                            Cause.Breakpoint,
-                            Cause.IllegalInst
-                        ], is_ebreak)
-                    ], is_ecall)
-                ], saddr_invalid)
-            ], laddr_invalid)
+                            Cause.IllegalInst,
+                            Cause.Breakpoint
+                        ], is_ebreak),
+                        Cause.Ecall + prv,
+                    ], is_ecall),
+                    Cause.StoreAddrMisaligned,
+                ], saddr_invalid),
+                Cause.LoadAddrMisaligned,
+            ], laddr_invalid),
+            Cause.InstAddrMisaligned,
         ], iaddr_invalid)
         update_when(regs[CSR.mcause], mcause, exception)
 
@@ -307,14 +311,22 @@ def test_csr():
         epc = regs[CSR.mepc].O
         evec = regs[CSR.mtvec].O + (prv << 6)
 
-        # m.display("regs[CSR.mtvec]=%x", regs[CSR.mtvec].O)\
-        #    .when(m.posedge(io.CLK))
-        # m.display("csr.O=%x, rdata=%x", csr.O, rdata).when(m.posedge(io.CLK))
-        # m.display("csr.epc=%x, epc=%x", csr.epc, epc).when(m.posedge(io.CLK))
-        # m.display("csr.evec=%x, evec=%x", csr.evec, evec)\
-        #     .when(m.posedge(io.CLK))
-        # m.display("csr.expt=%x, exception=%x", csr.expt, exception)\
-        #     .when(m.posedge(io.CLK))
+        m.display("*** Counter: %d ***", counter.O)
+        m.display("[in] inst: 0x%x, pc: 0x%x, addr: 0x%x, in: 0x%x",
+                  csr.inst, csr.pc, csr.addr, csr.I)
+
+        m.display("     cmd: 0x%x, st_type: 0x%x, ld_type: 0x%x, illegal: %d, "
+                  "pc_check: %d", csr.cmd, csr.st_type, csr.ld_type,
+                  csr.illegal, csr.pc_check)
+
+        m.display("[state] csr addr: %x", csr_addr)
+
+        for reg_addr, reg in regs.items():
+            m.display(f" {hex(int(reg_addr))} -> 0x%x", reg.O)
+
+        m.display("[out] read: 0x%x =? 0x%x, epc: 0x%x =? 0x%x, evec: 0x%x ?= "
+                  "0x%x, expt: %d ?= %d", csr.O, rdata, csr.epc, epc,
+                  csr.evec, evec, csr.expt, exception)
         io.check @= counter.O.reduce_or()
 
         io.rdata @= csr.O

@@ -1,6 +1,9 @@
 import random
+import magma as m
 from hwtypes import BitVector, Bit
-from .opcode import Opcode, Funct3
+from .opcode import Opcode, Funct3, Funct7
+from riscv_mini.instructions import FENCEI, ECALL, EBREAK, ERET
+from riscv_mini.csr import CSR
 
 
 def reg(x):
@@ -16,13 +19,18 @@ def imm(x):
     return (x & ((1 << 20) - 1))
 
 
-def concat(*args):
+def _concat(*args):
     x = args[0]
     if isinstance(x, Bit):
         x = BitVector[1](x)
     if len(args) == 1:
         return x
-    return x.concat(concat(*args[1:]))
+    return x.concat(_concat(*args[1:]))
+
+
+def concat(*args):
+    # Chisel and magma concats are reversed
+    return _concat(*reversed(args))
 
 
 def B(funct3, rs1, rs2, i):
@@ -68,3 +76,142 @@ def rs1(inst):
 
 
 nop = concat(BitVector[12](0), reg(0), Funct3.ADD, reg(0), Opcode.ITYPE)
+
+rand_fn7 = BitVector.random(7)
+fence = concat(
+    BitVector[4](0), BitVector[4](0xf), BitVector[4](0xf), BitVector[13](0),
+    Opcode.MEMORY
+)
+rand_csr = random.choice(CSR.regs)
+
+insts = [
+    concat(rand_fn7, rand_rs2, rand_rs1, rand_fn3, rand_rd, Opcode.LUI),
+    concat(rand_fn7, rand_rs2, rand_rs1, rand_fn3, rand_rd, Opcode.AUIPC),
+    concat(rand_fn7, rand_rs2, rand_rs1, rand_fn3, rand_rd, Opcode.JAL),
+    concat(rand_fn7, rand_rs2, rand_rs1, BitVector[3](0), rand_rd, Opcode.JALR),
+    concat(rand_fn7, rand_rs2, rand_rs1, Funct3.BEQ, rand_rd, Opcode.BRANCH),
+    concat(rand_fn7, rand_rs2, rand_rs1, Funct3.BNE, rand_rd, Opcode.BRANCH),
+    concat(rand_fn7, rand_rs2, rand_rs1, Funct3.BLT, rand_rd, Opcode.BRANCH),
+    concat(rand_fn7, rand_rs2, rand_rs1, Funct3.BGE, rand_rd, Opcode.BRANCH),
+    concat(rand_fn7, rand_rs2, rand_rs1, Funct3.BLTU, rand_rd, Opcode.BRANCH),
+    concat(rand_fn7, rand_rs2, rand_rs1, Funct3.BGEU, rand_rd, Opcode.BRANCH),
+    concat(rand_fn7, rand_rs2, rand_rs1, Funct3.LB, rand_rd, Opcode.LOAD),
+    concat(rand_fn7, rand_rs2, rand_rs1, Funct3.LH, rand_rd, Opcode.LOAD),
+    concat(rand_fn7, rand_rs2, rand_rs1, Funct3.LW, rand_rd, Opcode.LOAD),
+    concat(rand_fn7, rand_rs2, rand_rs1, Funct3.LBU, rand_rd, Opcode.LOAD),
+    concat(rand_fn7, rand_rs2, rand_rs1, Funct3.LHU, rand_rd, Opcode.LOAD),
+    concat(rand_fn7, rand_rs2, rand_rs1, Funct3.SB, rand_rd, Opcode.STORE),
+    concat(rand_fn7, rand_rs2, rand_rs1, Funct3.SH, rand_rd, Opcode.STORE),
+    concat(rand_fn7, rand_rs2, rand_rs1, Funct3.SW, rand_rd, Opcode.STORE),
+    concat(rand_fn7, rand_rs2, rand_rs1, Funct3.ADD, rand_rd, Opcode.ITYPE),
+    concat(rand_fn7, rand_rs2, rand_rs1, Funct3.SLT, rand_rd, Opcode.ITYPE),
+    concat(rand_fn7, rand_rs2, rand_rs1, Funct3.SLTU, rand_rd, Opcode.ITYPE),
+    concat(rand_fn7, rand_rs2, rand_rs1, Funct3.XOR, rand_rd, Opcode.ITYPE),
+    concat(rand_fn7, rand_rs2, rand_rs1, Funct3.OR, rand_rd, Opcode.ITYPE),
+    concat(rand_fn7, rand_rs2, rand_rs1, Funct3.AND, rand_rd, Opcode.ITYPE),
+    concat(Funct7.U, rand_rs2, rand_rs1, Funct3.SLL, rand_rd, Opcode.ITYPE),
+    concat(Funct7.U, rand_rs2, rand_rs1, Funct3.SR, rand_rd, Opcode.ITYPE),
+    concat(Funct7.S, rand_rs2, rand_rs1, Funct3.SR, rand_rd, Opcode.ITYPE),
+    concat(Funct7.U, rand_rs2, rand_rs1, Funct3.ADD, rand_rd, Opcode.RTYPE),
+    concat(Funct7.S, rand_rs2, rand_rs1, Funct3.ADD, rand_rd, Opcode.RTYPE),
+    concat(Funct7.U, rand_rs2, rand_rs1, Funct3.SLL, rand_rd, Opcode.RTYPE),
+    concat(Funct7.U, rand_rs2, rand_rs1, Funct3.SLT, rand_rd, Opcode.RTYPE),
+    concat(Funct7.U, rand_rs2, rand_rs1, Funct3.SLTU, rand_rd, Opcode.RTYPE),
+    concat(Funct7.U, rand_rs2, rand_rs1, Funct3.XOR, rand_rd, Opcode.RTYPE),
+    concat(Funct7.U, rand_rs2, rand_rs1, Funct3.SR, rand_rd, Opcode.RTYPE),
+    concat(Funct7.S, rand_rs2, rand_rs1, Funct3.SR, rand_rd, Opcode.RTYPE),
+    concat(Funct7.U, rand_rs2, rand_rs1, Funct3.OR, rand_rd, Opcode.RTYPE),
+    concat(Funct7.U, rand_rs2, rand_rs1, Funct3.AND, rand_rd, Opcode.RTYPE),
+    fence, FENCEI.as_bv(),
+    concat(rand_csr, rand_rs1, Funct3.CSRRW, rand_rd, Opcode.SYSTEM),
+    concat(rand_csr, rand_rs1, Funct3.CSRRS, rand_rd, Opcode.SYSTEM),
+    concat(rand_csr, rand_rs1, Funct3.CSRRC, rand_rd, Opcode.SYSTEM),
+    concat(rand_csr, rand_rs1, Funct3.CSRRWI, rand_rd, Opcode.SYSTEM),
+    concat(rand_csr, rand_rs1, Funct3.CSRRSI, rand_rd, Opcode.SYSTEM),
+    concat(rand_csr, rand_rs1, Funct3.CSRRCI, rand_rd, Opcode.SYSTEM),
+    ECALL.as_bv(), EBREAK.as_bv(), ERET.as_bv(), nop, rand_inst
+]
+
+
+def inst_31(inst):
+    if isinstance(inst, m.BitPattern):
+        inst = inst.as_bv()
+    return ((inst >> 31) & 0x1)[0]
+
+
+def inst_30_25(inst):
+    if isinstance(inst, m.BitPattern):
+        inst = inst.as_bv()
+    return ((inst >> 25) & 0x3f)[:6]
+
+
+def inst_24_21(inst):
+    if isinstance(inst, m.BitPattern):
+        inst = inst.as_bv()
+    return ((inst >> 21) & 0xf)[:4]
+
+
+def inst_20(inst):
+    if isinstance(inst, m.BitPattern):
+        inst = inst.as_bv()
+    return ((inst >> 20) & 0x1)[0]
+
+
+def inst_19_12(inst):
+    if isinstance(inst, m.BitPattern):
+        inst = inst.as_bv()
+    return ((inst >> 12) & 0xff)[:8]
+
+
+def inst_11_8(inst):
+    if isinstance(inst, m.BitPattern):
+        inst = inst.as_bv()
+    return ((inst >> 8) & 0xf)[:4]
+
+
+def inst_7(inst):
+    if isinstance(inst, m.BitPattern):
+        inst = inst.as_bv()
+    return ((inst >> 7) & 0x1)[0]
+
+
+def iimm(inst):
+    return concat(
+        concat(*(inst_31(inst) for _ in range(21))),
+        inst_30_25(inst), inst_24_21(inst), inst_20(inst)
+    )
+
+
+def simm(inst):
+    return concat(
+        concat(*(inst_31(inst) for _ in range(21))),
+        inst_30_25(inst), inst_11_8(inst), inst_7(inst)
+    )
+
+
+def bimm(inst):
+    return concat(
+        concat(*(inst_31(inst) for _ in range(20))),
+        inst_7(inst), inst_30_25(inst), inst_11_8(inst), BitVector[1](0)
+    )
+
+
+def uimm(inst):
+    return concat(
+        inst_31(inst), inst_30_25(inst), inst_24_21(inst),
+        inst_20(inst), inst_19_12(inst), BitVector[12](0)
+    )
+
+
+def jimm(inst):
+    return concat(
+        concat(*(inst_31(inst) for _ in range(12))),
+        inst_19_12(inst), inst_20(inst), inst_30_25(inst), inst_24_21(inst),
+        BitVector[1](0)
+    )
+
+
+def zimm(inst):
+    if isinstance(inst, m.BitPattern):
+        inst = inst.as_bv()
+    return (inst >> 15) & 0x1f

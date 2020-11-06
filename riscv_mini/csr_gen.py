@@ -4,10 +4,10 @@ import magma as m
 from hwtypes import Bit
 from hwtypes import BitVector as BV
 
+from riscv_mini.const import Const
 from riscv_mini.csr import CSR
 import riscv_mini.instructions as Instructions
 import riscv_mini.control as Control
-from riscv_mini.data_path import Const
 
 
 def HostIO(x_len):
@@ -63,10 +63,12 @@ class CSRGen(m.Generator2):
         instret = m.Register(m.UInt[x_len], reset_type=m.ResetN)()
         instreth = m.Register(m.UInt[x_len], reset_type=m.ResetN)()
 
-        mcpuid = m.concat(BV[2](0),  # RV32I
-                          BV[x_len - 28](0),
-                          BV[26](1 << (ord('I') - ord('A')) |  # Base ISA
-                                 1 << (ord('U') - ord('A'))))  # User Mode
+        mcpuid = m.concat(
+            BV[26](1 << (ord('I') - ord('A')) |  # Base ISA
+                   1 << (ord('U') - ord('A'))),  # User Mode
+            BV[x_len - 28](0),
+            BV[2](0),  # RV32I
+        )
         mimpid = BV[x_len](0)
         mhartid = BV[x_len](0)
 
@@ -92,8 +94,8 @@ class CSRGen(m.Generator2):
         XS = BV[2](0)
         FS = BV[2](0)
         SD = BV[1](0)
-        mstatus = m.concat(SD, BV[x_len - 23](0), VM, MPRV, XS, FS, PRV3, IE3,
-                           PRV2, IE2, PRV1.O, IE1.O, PRV.O, IE.O)
+        mstatus = m.concat(IE.O, PRV.O, IE1.O, PRV1.O, IE2, PRV2, IE3, PRV3,
+                           FS, XS, MPRV, VM, BV[x_len - 23](0), SD)
         mtvec = BV[x_len](Const.PC_EVEC)
         mtdeleg = BV[x_len](0)
 
@@ -111,10 +113,10 @@ class CSRGen(m.Generator2):
         HSIE = False
         SSIE = False
 
-        mip = m.concat(BV[x_len - 8](0), MTIP.O, HTIP, STIP, Bit(False),
-                       MSIP.O, HSIP, SSIP, Bit(False))
-        mie = m.concat(BV[x_len - 8](0), MTIE.O, HTIE, STIE, Bit(False),
-                       MSIE.O, HSIE, SSIE, Bit(False))
+        mip = m.concat(Bit(False), SSIP, HSIP, MSIP.O, Bit(False), STIP, HTIP,
+                       MTIP.O, BV[x_len - 8](0))
+        mie = m.concat(Bit(False), SSIE, HSIE, MSIE.O, Bit(False), STIE, HTIE,
+                       MTIE.O, BV[x_len - 8](0))
 
         mtimecmp = m.Register(m.UInt[x_len], reset_type=m.ResetN)()
         mscratch = m.Register(m.UInt[x_len], reset_type=m.ResetN)()
@@ -305,4 +307,4 @@ class CSRGen(m.Generator2):
                     elif csr_addr == CSR.timehw:
                         timeh.I @= wdata
                     elif csr_addr == CSR.instrethw:
-                        instret.I @= wdata
+                        instreth.I @= wdata
