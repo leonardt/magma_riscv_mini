@@ -20,7 +20,8 @@ class RegFile(m.Generator2):
             waddr=m.In(m.UInt[5]),
             wdata=m.In(m.UInt[x_len])
         ) + m.ClockIO(has_reset=True)
-        regs = RegFileBuilder("reg_file", 32, x_len, write_forward=False)
+        regs = RegFileBuilder("reg_file", 32, x_len, write_forward=False,
+                              reset_type=m.Reset)
         io.rdata1 @= m.mux([0, regs[io.raddr1]], io.raddr1.reduce_or())
         io.rdata2 @= m.mux([0, regs[io.raddr2]], io.raddr2.reduce_or())
         wen = m.bit(io.wen) & io.waddr.reduce_or()

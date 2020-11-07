@@ -24,11 +24,14 @@ def make_HostIO(x_len):
 
 
 def make_DatapathIO(x_len):
+    control_decl = make_ControlIO(x_len).decl()
+    control_ports = {k: v for k, v in zip(control_decl[::2],
+                                          control_decl[1::2])}
     return m.IO(
         host=make_HostIO(x_len),
         icache=m.Flip(make_CacheIO(x_len)),
         dcache=m.Flip(make_CacheIO(x_len)),
-        ctrl=m.Flip(make_ControlIO(x_len))
+        ctrl=m.Flip(m.Product.from_fields("ControlIO", control_ports))
     )
 
 

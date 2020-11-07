@@ -25,6 +25,7 @@ jobs:
       shell: bash -l {0}
       run: |
           pip install -e git://github.com/phanrahan/magma.git@magma-riscv-mini#egg=magma-lang
+          pip install -e git://github.com/phanrahan/mawntle.git@regfile-reset-type#egg=magma-lang
           pip install -e git://github.com/leonardt/fault.git#egg=fault
 
           pip install pytest pytest-pycodestyle
