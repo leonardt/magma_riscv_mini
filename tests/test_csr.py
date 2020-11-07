@@ -86,7 +86,7 @@ def test_csr():
                   expected_evec=m.Out(m.UInt[x_len]),
                   expt=m.Out(m.Bit),
                   expected_expt=m.Out(m.Bit))
-        io += m.ClockIO(has_resetn=True)
+        io += m.ClockIO(has_reset=True)
 
         regs = {}
         for reg in CSR.regs:
@@ -99,7 +99,7 @@ def test_csr():
                 init = Const.PC_EVEC
             else:
                 init = 0
-            regs[reg] = m.Register(init=BV[32](init), reset_type=m.ResetN)()
+            regs[reg] = m.Register(init=BV[32](init), reset_type=m.Reset)()
 
         csr = CSRGen(x_len)()
         ctrl = Control.Control(x_len)()
@@ -353,11 +353,11 @@ def test_csr():
                 reg.I @= reg.O
 
     tester = fault.Tester(CSR_DUT, CSR_DUT.CLK)
-    tester.circuit.RESETN = 1
+    tester.circuit.RESET = 0
     tester.step(2)
-    tester.circuit.RESETN = 0
+    tester.circuit.RESET = 1
     tester.step(2)
-    tester.circuit.RESETN = 1
+    tester.circuit.RESET = 0
     tester.step(2)
     loop = tester._while(tester.circuit.done == 0)
     # loop.circuit.failed.expect(0)

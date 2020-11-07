@@ -82,20 +82,22 @@ WB_CSR = BV[2](3)
 
 
 def make_ControlIO(x_len):
-    return m.IO(inst=m.In(m.UInt[x_len]),
-                pc_sel=m.Out(m.UInt[2]),
-                inst_kill=m.Out(m.Bit),
-                A_sel=m.Out(m.UInt[1]),
-                B_sel=m.Out(m.UInt[1]),
-                imm_sel=m.Out(m.UInt[3]),
-                alu_op=m.Out(m.UInt[4]),
-                br_type=m.Out(m.UInt[3]),
-                st_type=m.Out(m.UInt[2]),
-                ld_type=m.Out(m.UInt[3]),
-                wb_sel=m.Out(m.UInt[2]),
-                wb_en=m.Out(m.Bit),
-                csr_cmd=m.Out(m.UInt[3]),
-                illegal=m.Out(m.Bit))
+    class ControlIO(m.Product):
+        inst = m.In(m.UInt[x_len])
+        pc_sel = m.Out(m.UInt[2])
+        inst_kill = m.Out(m.Bit)
+        A_sel = m.Out(m.UInt[1])
+        B_sel = m.Out(m.UInt[1])
+        imm_sel = m.Out(m.UInt[3])
+        alu_op = m.Out(m.UInt[4])
+        br_type = m.Out(m.UInt[3])
+        st_type = m.Out(m.UInt[2])
+        ld_type = m.Out(m.UInt[3])
+        wb_sel = m.Out(m.UInt[2])
+        wb_en = m.Out(m.Bit)
+        csr_cmd = m.Out(m.UInt[3])
+        illegal = m.Out(m.Bit)
+    return ControlIO
 
 
 #                                                     kill
@@ -210,7 +212,7 @@ inst_map = {
 
 class Control(m.Generator2):
     def __init__(self, x_len):
-        self.io = io = make_ControlIO(x_len)
+        self.io = io = m.IO(**{k:v for k, v in make_ControlIO(x_len).items()})
 
         ctrl_signals = m.dict_lookup(inst_map, io.inst, default=default)
 

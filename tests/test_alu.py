@@ -31,6 +31,6 @@ def test_alu_basic(alu):
         tester.circuit.B = B
         tester.circuit.op = alu_op
         tester.eval()
-        tester.circuit.out.expect(py_op(A, B))
+        tester.circuit.O.expect(py_op(A, B))
 
     tester.compile_and_run("verilator", flags=["-Wno-unused"])

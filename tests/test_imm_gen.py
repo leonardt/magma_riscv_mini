@@ -24,7 +24,7 @@ def test_imm_gen_wire():
         z = m.mux([zimm(i) for i in insts], counter.O)
         x = m.mux([iimm(i) & -2 for i in insts], counter.O)
 
-        out = m.mux([
+        O = m.mux([
             m.mux([
                 m.mux([
                     m.mux([
@@ -49,11 +49,11 @@ def test_imm_gen_wire():
         imm.sel @= ctrl.imm_sel
         io.done @= counter.COUT
 
-        f.assert_immediate(imm.out == out, failure_msg=(
-            "Counter: %d, Type: 0x%x, Out: %x ?= %x", counter.O, imm.sel,
-            imm.out, out))
-        m.display("Counter: %d, Type: 0x%x, Out: %x ?= %x",
-                  counter.O, imm.sel, imm.out, out)
+        f.assert_immediate(imm.O == O, failure_msg=(
+            "Counter: %d, Type: 0x%x, O: %x ?= %x", counter.O, imm.sel,
+            imm.O, O))
+        m.display("Counter: %d, Type: 0x%x, O: %x ?= %x",
+                  counter.O, imm.sel, imm.O, O)
 
     tester = f.Tester(DUT, DUT.CLK)
     tester.wait_until_high(DUT.done)

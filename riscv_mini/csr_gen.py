@@ -50,18 +50,18 @@ class CSRGen(m.Generator2):
             expt=m.Out(m.Bit),
             evec=m.Out(m.UInt[x_len]),
             epc=m.Out(m.UInt[x_len])
-        ) + HostIO(x_len) + m.ClockIO(has_resetn=True)
+        ) + HostIO(x_len) + m.ClockIO(has_reset=True)
 
         csr_addr = io.inst[20:32]
         rs1_addr = io.inst[15:20]
 
         # user counters
-        time = m.Register(m.UInt[x_len], reset_type=m.ResetN)()
-        timeh = m.Register(m.UInt[x_len], reset_type=m.ResetN)()
-        cycle = m.Register(m.UInt[x_len], reset_type=m.ResetN)()
-        cycleh = m.Register(m.UInt[x_len], reset_type=m.ResetN)()
-        instret = m.Register(m.UInt[x_len], reset_type=m.ResetN)()
-        instreth = m.Register(m.UInt[x_len], reset_type=m.ResetN)()
+        time = m.Register(m.UInt[x_len], reset_type=m.Reset)()
+        timeh = m.Register(m.UInt[x_len], reset_type=m.Reset)()
+        cycle = m.Register(m.UInt[x_len], reset_type=m.Reset)()
+        cycleh = m.Register(m.UInt[x_len], reset_type=m.Reset)()
+        instret = m.Register(m.UInt[x_len], reset_type=m.Reset)()
+        instreth = m.Register(m.UInt[x_len], reset_type=m.Reset)()
 
         mcpuid = m.concat(
             BV[26](1 << (ord('I') - ord('A')) |  # Base ISA
@@ -74,13 +74,13 @@ class CSRGen(m.Generator2):
 
         # interrupt enable stack
         PRV = m.Register(m.UInt[len(CSR.PRV_M)], init=CSR.PRV_M,
-                         reset_type=m.ResetN)()
+                         reset_type=m.Reset)()
         PRV1 = m.Register(m.UInt[len(CSR.PRV_M)], init=CSR.PRV_M,
-                          reset_type=m.ResetN)()
+                          reset_type=m.Reset)()
         PRV2 = BV[2](0)
         PRV3 = BV[2](0)
-        IE = m.Register(m.Bit, init=False, reset_type=m.ResetN)()
-        IE1 = m.Register(m.Bit, init=False, reset_type=m.ResetN)()
+        IE = m.Register(m.Bit, init=False, reset_type=m.Reset)()
+        IE1 = m.Register(m.Bit, init=False, reset_type=m.Reset)()
         IE2 = False
         IE3 = False
 
@@ -100,16 +100,16 @@ class CSRGen(m.Generator2):
         mtdeleg = BV[x_len](0)
 
         # interrupt registers
-        MTIP = m.Register(m.Bit, init=False, reset_type=m.ResetN)()
+        MTIP = m.Register(m.Bit, init=False, reset_type=m.Reset)()
         HTIP = False
         STIP = False
-        MTIE = m.Register(m.Bit, init=False, reset_type=m.ResetN)()
+        MTIE = m.Register(m.Bit, init=False, reset_type=m.Reset)()
         HTIE = False
         STIE = False
-        MSIP = m.Register(m.Bit, init=False, reset_type=m.ResetN)()
+        MSIP = m.Register(m.Bit, init=False, reset_type=m.Reset)()
         HSIP = False
         SSIP = False
-        MSIE = m.Register(m.Bit, init=False, reset_type=m.ResetN)()
+        MSIE = m.Register(m.Bit, init=False, reset_type=m.Reset)()
         HSIE = False
         SSIE = False
 
@@ -118,15 +118,15 @@ class CSRGen(m.Generator2):
         mie = m.concat(Bit(False), SSIE, HSIE, MSIE.O, Bit(False), STIE, HTIE,
                        MTIE.O, BV[x_len - 8](0))
 
-        mtimecmp = m.Register(m.UInt[x_len], reset_type=m.ResetN)()
-        mscratch = m.Register(m.UInt[x_len], reset_type=m.ResetN)()
+        mtimecmp = m.Register(m.UInt[x_len], reset_type=m.Reset)()
+        mscratch = m.Register(m.UInt[x_len], reset_type=m.Reset)()
 
-        mepc = m.Register(m.UInt[x_len], reset_type=m.ResetN)()
-        mcause = m.Register(m.UInt[x_len], reset_type=m.ResetN)()
-        mbadaddr = m.Register(m.UInt[x_len], reset_type=m.ResetN)()
+        mepc = m.Register(m.UInt[x_len], reset_type=m.Reset)()
+        mcause = m.Register(m.UInt[x_len], reset_type=m.Reset)()
+        mbadaddr = m.Register(m.UInt[x_len], reset_type=m.Reset)()
 
-        mtohost = m.Register(m.UInt[x_len], reset_type=m.ResetN)()
-        mfromhost = m.Register(m.UInt[x_len], reset_type=m.ResetN)()
+        mtohost = m.Register(m.UInt[x_len], reset_type=m.Reset)()
+        mfromhost = m.Register(m.UInt[x_len], reset_type=m.Reset)()
 
         io.host.tohost @= mtohost.O
         csr_file = {

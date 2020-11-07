@@ -7,7 +7,7 @@ class ImmGen(m.Generator2):
         self.io = m.IO(
             inst=m.In(m.UInt[x_len]),
             sel=m.In(m.UInt[3]),
-            out=m.Out(m.UInt[x_len])
+            O=m.Out(m.UInt[x_len])
         )
 
 
@@ -27,7 +27,7 @@ class ImmGenWire(ImmGen):
         )), x_len)
         Zimm = m.zext_to(inst[15:20], x_len)
 
-        self.io.out @= m.dict_lookup({
+        self.io.O @= m.dict_lookup({
             IMM_I: Iimm,
             IMM_S: Simm,
             IMM_B: Bimm,
