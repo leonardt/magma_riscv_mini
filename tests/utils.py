@@ -215,3 +215,62 @@ def zimm(inst):
     if isinstance(inst, m.BitPattern):
         inst = inst.as_bv()
     return (inst >> 15) & 0x1f
+
+
+def S(funct3, rs2, rs1, i):
+    return concat(imm(i)[5:12], reg(rs2), reg(rs1), funct3, imm(i)[0:5],
+                  Opcode.STORE)
+
+
+def RU(funct3, rd, rs1, rs2):
+    return concat(Funct7.U, reg(rs2), reg(rs1), funct3, reg(rd), Opcode.RTYPE)
+
+
+def RS(funct3, rd, rs1, rs2):
+    return concat(Funct7.S, reg(rs2), reg(rs1), funct3, reg(rd), Opcode.RTYPE)
+
+
+fin = concat(CSR.mtohost, reg(31), Funct3.CSRRW, reg(0), Opcode.SYSTEM)
+
+bypass_test = [
+    I(Funct3.ADD, 1, 0, 1),   # ADDI x1, x0, 1   # x1 <- 1
+    S(Funct3.SW, 1, 0, 12),   # SW   x1, x0, 12  # Mem[12] <- 1
+    L(Funct3.LW, 2, 0, 12),   # LW   x2, x0, 12  # x2 <- 1
+    RU(Funct3.ADD, 3, 2, 2),  # ADD  x3, x2, x2  # x3 <- 2
+    RS(Funct3.ADD, 4, 3, 2),  # SUB  x4, x2, x3  # x4 <- 1
+    RU(Funct3.SLL, 5, 3, 4),  # SLL  x5, x2, x4  # x5 <- 4
+    RU(Funct3.SLT, 6, 4, 5),  # SLT  x6, x4, x5  # x6 <- 1
+    B(Funct3.BEQ, 1, 6, 8),   # BEQ  x1, x6, 8   # go to the BGE branch
+    J(0, 12),                 # JAL  x0, 12      # skip nop
+    B(Funct3.BGE, 4, 1, -4),  # BGE  x4, x1, -4  # go to the jump
+    nop, nop,
+    RU(Funct3.ADD, 26, 0, 1),  # ADD x26,  x0, x1  # x26 <- 1
+    RU(Funct3.ADD, 27, 26, 2),  # ADD x27, x26, x2  # x27 <- 2
+    RU(Funct3.ADD, 28, 27, 3),  # ADD x28, x27, x3  # x28 <- 4
+    RU(Funct3.ADD, 29, 28, 4),  # ADD x29, x28, x4  # x29 <- 5
+    RU(Funct3.ADD, 30, 29, 5),  # ADD x30, x29, x5  # x30 <- 9
+    RU(Funct3.ADD, 31, 30, 6),  # ADD x31, x31, x6  # x31 <- 10
+    fin
+]
+
+exception_test = [
+    fence,
+    I(Funct3.ADD, 31, 0, 2),  # ADDI x31, x0,  1 # x31 <- 2
+    I(Funct3.ADD, 31, 31, 1),  # ADDI x31, x31, 1 # x31 <- 3
+    I(Funct3.ADD, 31, 31, 1),  # ADDI x31, x32, 1 # x31 <- 4
+    BitVector[32](0),          # exception
+    I(Funct3.ADD, 31, 31, 1),  # ADDI x31, x31, 1 # x31 <- 5
+    I(Funct3.ADD, 31, 31, 1),  # ADDI x31, x31, 1 # x31 <- 6
+    I(Funct3.ADD, 31, 31, 1),  # ADDI x31, x31, 1 # x31 <- 7
+    fin
+]
+
+tests = {
+    "bypass": bypass_test,
+    "exception": exception_test
+}
+
+test_results = {
+    "bypass": 10,
+    "exception": 4
+}
