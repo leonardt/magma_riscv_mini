@@ -94,7 +94,6 @@ def test_datapath(test):
                          data_path.host.tohost)
         )
 
-
     tester = f.Tester(DUT, DUT.CLK)
     tester.wait_until_high(DUT.done)
     tester.compile_and_run("verilator", magma_opts={"inline": True,
