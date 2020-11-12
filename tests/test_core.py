@@ -86,7 +86,7 @@ def test_core(test):
             state = m.Register(init=INIT)()
             cycle = m.Register(m.UInt[32])()
 
-            n = len(_hex) * (1 << 8)
+            n = len(_hex)
             counter = CounterModM(n, n.bit_length(), has_ce=True)
             counter.CE @= m.enable(state.O == INIT)
             cntr, done = counter.O, counter.COUT
@@ -111,7 +111,7 @@ def test_core(test):
             core.icache.resp.data.data @= m.Register(m.UInt[x_len])()(imem_data)
             core.dcache.resp.data.data @= m.Register(m.UInt[x_len])()(dmem_data)
 
-            chunk = m.mux(_hex(cntr))
+            chunk = m.mux(_hex, cntr)
 
             imem.write(m.zext_to(cntr, 20), chunk, m.enable(state.O == INIT))
 
