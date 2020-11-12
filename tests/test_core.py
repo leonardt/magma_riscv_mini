@@ -60,7 +60,7 @@ def load_mem(lines, chunk):
     return insts
 
 
-@pytest.mark.parametrize('test', [SimpleTests]) #, ISATests, BmarkTests])
+@pytest.mark.parametrize('test', [SimpleTests])  # , ISATests, BmarkTests])
 def test_core(test):
     for t in test.tests:
         x_len = 32
