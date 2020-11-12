@@ -14,13 +14,7 @@ from riscv_mini.imm_gen import ImmGenWire
 import riscv_mini.instructions as Instructions
 from riscv_mini.reg_file import RegFile
 from riscv_mini.br_cond import BrCondArea
-
-
-def make_HostIO(x_len):
-    class HostIO(m.Product):
-        fromhost = m.In(m.Valid[m.UInt[x_len]])
-        tohost = m.Out(m.UInt[x_len])
-    return HostIO
+from riscv_mini.core import make_HostIO
 
 
 def make_DatapathIO(x_len):
