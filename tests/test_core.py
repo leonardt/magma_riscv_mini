@@ -161,5 +161,4 @@ def test_core(test):
     tester.wait_until_high(DUT.done)
     tester.compile_and_run("verilator", magma_opts={"inline": True,
                                                     "verilator_compat": True},
-                           flags=['-Wno-unused', '-Wno-undriven', '--assert'],
-                           disp_type="realtime")
+                           flags=['-Wno-unused', '-Wno-undriven', '--assert'])
