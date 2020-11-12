@@ -60,7 +60,7 @@ def load_mem(lines, chunk):
     return insts
 
 
-@pytest.mark.parametrize('test', [SimpleTests, ISATests, BmarkTests])
+@pytest.mark.parametrize('test', [SimpleTests]) #, ISATests, BmarkTests])
 def test_core(test):
     for t in test.tests:
         x_len = 32
@@ -133,29 +133,31 @@ def test_core(test):
                 if state.O == RUN:
                     cycle.I @= cycle.O + 1
 
-            m.display("LOADMEM[%x] <= %x", cntr * (x_len // 8),
-                      chunk).when(m.posedge(io.CLK)).if_(state.O == INIT)
+            debug = False
+            if debug:
+                m.display("LOADMEM[%x] <= %x", cntr * (x_len // 8),
+                          chunk).when(m.posedge(io.CLK)).if_(state.O == INIT)
 
-            m.display("INST[%x] => %x", iaddr * (x_len // 8),
-                      dmem_data).when(m.posedge(io.CLK)).if_(
-                          (state.O == RUN) & core.icache.req.valid)
+                m.display("INST[%x] => %x", iaddr * (x_len // 8),
+                          dmem_data).when(m.posedge(io.CLK)).if_(
+                              (state.O == RUN) & core.icache.req.valid)
 
-            m.display("MEM[%x] <= %x", daddr * (x_len // 8),
-                      write).when(m.posedge(io.CLK)).if_(
-                          (state.O == RUN) & core.dcache.req.valid &
-                          core.dcache.req.data.mask.reduce_or())
+                m.display("MEM[%x] <= %x", daddr * (x_len // 8),
+                          write).when(m.posedge(io.CLK)).if_(
+                              (state.O == RUN) & core.dcache.req.valid &
+                              core.dcache.req.data.mask.reduce_or())
 
-            m.display("MEM[%x] => %x", daddr * (x_len // 8),
-                      dmem_data).when(m.posedge(io.CLK)).if_(
-                          (state.O == RUN) & core.dcache.req.valid &
-                          ~core.dcache.req.data.mask.reduce_or())
+                m.display("MEM[%x] => %x", daddr * (x_len // 8),
+                          dmem_data).when(m.posedge(io.CLK)).if_(
+                              (state.O == RUN) & core.dcache.req.valid &
+                              ~core.dcache.req.data.mask.reduce_or())
+
+                m.display("cycles: %d", cycle.O).when(m.posedge(io.CLK)).if_(
+                    io.done.value() == 1)
             f.assert_immediate(cycle.O < test.maxcycles)
             io.done @= core.host.tohost != 0
             f.assert_immediate((core.host.tohost >> 1) == 0,
-                              failure_msg=("* tohost: %d *", core.host.tohost))
-
-            m.display("cycles: %d", cycle.O).when(m.posedge(io.CLK)).if_(
-                io.done.value() == 1)
+                               failure_msg=("* tohost: %d *", core.host.tohost))
 
     tester = f.Tester(DUT, DUT.CLK)
     tester.wait_until_high(DUT.done)
