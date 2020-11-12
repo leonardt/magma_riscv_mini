@@ -1,15 +1,8 @@
 import magma as m
 
 from riscv_mini.cache import make_CacheIO
-from riscv_mini.data_path import Datapath
+from riscv_mini.data_path import Datapath, make_HostIO
 from riscv_mini.control import Control
-
-
-def make_HostIO(x_len):
-    class HostIO(m.Product):
-        fromhost = m.In(m.Valid[m.UInt[x_len]])
-        tohost = m.Out(m.UInt[x_len])
-    return HostIO
 
 
 class Core(m.Generator2):
@@ -18,7 +11,7 @@ class Core(m.Generator2):
             host=make_HostIO(x_len),
             icache=m.Flip(make_CacheIO(x_len)),
             dcache=m.Flip(make_CacheIO(x_len)),
-        )
+        ) + m.ClockIO(has_reset=True)
 
         data_path = Datapath(x_len)()
         control = Control(x_len)()
