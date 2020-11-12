@@ -111,10 +111,7 @@ def test_core(test):
             core.icache.resp.data.data @= m.Register(m.UInt[x_len])()(imem_data)
             core.dcache.resp.data.data @= m.Register(m.UInt[x_len])()(dmem_data)
 
-            chunk = m.UInt[x_len](name="chunk")
-
-            chunk @= (m.mux(_hex, (cntr >> m.uint(8, n.bit_length()))[:8]) >>
-                      (m.zext_to(cntr[0:8], 32) * m.uint(x_len, 32)))
+            chunk = m.mux(_hex(cntr))
 
             imem.write(m.zext_to(cntr, 20), chunk, m.enable(state.O == INIT))
 
