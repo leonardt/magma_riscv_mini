@@ -12,6 +12,9 @@ from riscv_mini.nasti import (make_NastiIO, NastiParameters,
 from riscv_mini.cache import Cache, make_CacheResp, make_CacheReq
 
 
+TRACE = False
+
+
 class Queue(m.Generator2):
     def __init__(self, T, entries, pipe=False, flow=False):
         assert entries >= 0
@@ -181,20 +184,23 @@ class GoldCache(m.Generator2):
         # m.display("gold_b_valid=%x",
         #           self.io.nasti.b.valid).when(m.posedge(self.io.CLK))
 
-        m.display("[%0t] [cache] data[%x] <= %x, off: %x, req: %x, mask: %b",
-                  m.time(), idx, write, off, self.io.req.data.data,
-                  self.io.req.data.mask)\
-            .when(m.posedge(self.io.CLK))\
-            .if_((state.O == State.IDLE) &
-                 (self.io.req.valid & self.io.resp.ready) &
-                 (v_rdata & (tags_rdata == tag)) & req.mask.reduce_or())
+        if TRACE:
+            m.display(
+                "[%0t] [cache] data[%x] <= %x, off: %x, req: %x, mask: %b",
+                m.time(), idx, write, off, self.io.req.data.data,
+                self.io.req.data.mask)\
+                .when(m.posedge(self.io.CLK))\
+                .if_((state.O == State.IDLE) &
+                     (self.io.req.valid & self.io.resp.ready) &
+                     (v_rdata & (tags_rdata == tag)) & req.mask.reduce_or())
 
-        m.display("[%0t] [cache] data[%x] => %x, off: %x, resp: %x", m.time(),
-                  idx, write, off, self.io.resp.data.data.value())\
-            .when(m.posedge(self.io.CLK))\
-            .if_((state.O == State.IDLE) &
-                 (self.io.req.valid & self.io.resp.ready) &
-                 (v_rdata & (tags_rdata == tag)) & ~req.mask.reduce_or())
+            m.display(
+                "[%0t] [cache] data[%x] => %x, off: %x, resp: %x", m.time(),
+                idx, write, off, self.io.resp.data.data.value())\
+                .when(m.posedge(self.io.CLK))\
+                .if_((state.O == State.IDLE) &
+                     (self.io.req.valid & self.io.resp.ready) &
+                     (v_rdata & (tags_rdata == tag)) & ~req.mask.reduce_or())
 
         @m.inline_combinational()
         def logic():
@@ -402,12 +408,15 @@ def test_cache():
                     dut_mem.ar.ready @= True
                     mem_state.I @= MemState.IDLE
 
-        m.display("[%0t]: [write] mem[%x] <= %x", m.time(), mem.WADDR.value(),
-                  dut_mem.w.data.data).when(m.posedge(io.CLK)).if_(mem_wen0)
-        m.display("[%0t]: [read] mem[%x] => %x", m.time(), mem.RADDR.value(),
-                  dut_mem.r.data.data).when(m.posedge(io.CLK)).if_(
-                      (mem_state.O == MemState.READ) & dut_mem.r.ready &
-                      gold_mem.r.ready)
+        if TRACE:
+            m.display("[%0t]: [write] mem[%x] <= %x", m.time(),
+                      mem.WADDR.value(),
+                      dut_mem.w.data.data).when(m.posedge(io.CLK)).if_(mem_wen0)
+            m.display("[%0t]: [read] mem[%x] => %x", m.time(),
+                      mem.RADDR.value(),
+                      dut_mem.r.data.data).when(m.posedge(io.CLK)).if_(
+                          (mem_state.O == MemState.READ) & dut_mem.r.ready &
+                          gold_mem.r.ready)
 
         def rand_data(nasti_params):
             rand_data = BitVector[nasti_params.x_data_bits](0)
@@ -506,10 +515,11 @@ def test_cache():
         mem_wdata1 @= m.mux(init_data, init_counter.O)
 
         check_resp_data = m.Bit()
-        m.display("[%0t]: [init] mem[%x] <= %x", m.time(),
-                  mem_waddr1, mem_wdata1)\
-            .when(m.posedge(io.CLK))\
-            .if_(state.O == TestState.INIT)
+        if TRACE:
+            m.display("[%0t]: [init] mem[%x] <= %x", m.time(),
+                      mem_waddr1, mem_wdata1)\
+                .when(m.posedge(io.CLK))\
+                .if_(state.O == TestState.INIT)
 
         @m.inline_combinational()
         def state_fsm():
