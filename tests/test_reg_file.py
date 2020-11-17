@@ -33,4 +33,5 @@ def test_reg_file_basic():
     t.eval()
     t.circuit.rdata1.expect(0)
     t.circuit.rdata2.expect(0)
-    t.compile_and_run(target="verilator", flags=["-Wno-unused"])
+    t.compile_and_run(target="verilator", flags=["-Wno-unused",
+                                                 "-Wno-undriven"])
