@@ -27,9 +27,9 @@ class Queue(m.Generator2):
 
         ram = m.Memory(entries, T)()
         enq_ptr = mantle.CounterModM(entries, entries.bit_length(),
-                                     has_ce=True)
+                                     has_ce=True, cout=False)
         deq_ptr = mantle.CounterModM(entries, entries.bit_length(),
-                                     has_ce=True)
+                                     has_ce=True, cout=False)
         maybe_full = m.Register(init=False, has_enable=True)()
 
         ptr_match = enq_ptr.O == deq_ptr.O
@@ -59,12 +59,12 @@ class Queue(m.Generator2):
         def ispow2(n):
             return (n & (n - 1) == 0) and n != 0
 
-        ptr_diff = enq_ptr.O - deq_ptr.O
         count_len = len(self.io.count)
         if ispow2(entries):
             self.io.count @= m.mux([m.bits(0, count_len), entries],
                                    maybe_full.O & ptr_match)
         else:
+            ptr_diff = enq_ptr.O - deq_ptr.O
             self.io.count @= m.mux([
                 m.mux([
                     m.bits(0, count_len),
