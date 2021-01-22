@@ -25,16 +25,16 @@ class ImmGenWire(ImmGen):
             m.bits(0, 1), inst[21:25], inst[25:31], inst[20], inst[12:20],
             inst[31]
         )), x_len)
-        Zimm = m.zext_to(inst[15:20], x_len)
+        Zimm = m.sint(m.zext_to(inst[15:20], x_len))
 
-        self.io.O @= m.dict_lookup({
+        self.io.O @= m.uint(m.dict_lookup({
             IMM_I: Iimm,
             IMM_S: Simm,
             IMM_B: Bimm,
             IMM_U: Uimm,
             IMM_J: Jimm,
             IMM_Z: Zimm
-        }, self.io.sel, Iimm & -2)
+        }, self.io.sel, Iimm & -2))
 
 
 # TODO: ImmGenMux

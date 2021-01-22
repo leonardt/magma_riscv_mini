@@ -56,11 +56,11 @@ class Datapath(m.Generator2):
         csr_in = m.Register(m.UInt[x_len])()
 
         # Control signals
-        st_type = m.Register(type(self.io.ctrl.st_type).as_undirected())()
-        ld_type = m.Register(type(self.io.ctrl.ld_type).as_undirected())()
-        wb_sel = m.Register(type(self.io.ctrl.wb_sel).as_undirected())()
+        st_type = m.Register(type(self.io.ctrl.st_type).undirected_t())()
+        ld_type = m.Register(type(self.io.ctrl.ld_type).undirected_t())()
+        wb_sel = m.Register(type(self.io.ctrl.wb_sel).undirected_t())()
         wb_en = m.Register(m.Bit)()
-        csr_cmd = m.Register(type(self.io.ctrl.csr_cmd).as_undirected())()
+        csr_cmd = m.Register(type(self.io.ctrl.csr_cmd).undirected_t())()
         illegal = m.Register(m.Bit)()
         pc_check = m.Register(m.Bit)()
 
