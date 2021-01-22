@@ -549,8 +549,7 @@ def test_cache():
                                                gold_resp.data.data),
                            failure_msg=("dut.cpu.resp.data.data => %x != %x",
                                         dut.cpu.resp.data.data,
-                                        gold_resp.data.data),
-                           on=f.posedge(io.CLK))
+                                        gold_resp.data.data))
         # m.display("mem_state=%x", mem_state.O).when(m.posedge(io.CLK))
         # m.display("test_state=%x", state.O).when(m.posedge(io.CLK))
         # m.display("dut req valid = %x",
