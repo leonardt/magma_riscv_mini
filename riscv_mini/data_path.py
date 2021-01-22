@@ -56,11 +56,11 @@ class Datapath(m.Generator2):
         csr_in = m.Register(m.UInt[x_len])()
 
         # Control signals
-        st_type = m.Register(type(self.io.ctrl.st_type).undirected_t())()
-        ld_type = m.Register(type(self.io.ctrl.ld_type).undirected_t())()
-        wb_sel = m.Register(type(self.io.ctrl.wb_sel).undirected_t())()
+        st_type = m.Register(type(self.io.ctrl.st_type).undirected_t)()
+        ld_type = m.Register(type(self.io.ctrl.ld_type).undirected_t)()
+        wb_sel = m.Register(type(self.io.ctrl.wb_sel).undirected_t)()
         wb_en = m.Register(m.Bit)()
-        csr_cmd = m.Register(type(self.io.ctrl.csr_cmd).undirected_t())()
+        csr_cmd = m.Register(type(self.io.ctrl.csr_cmd).undirected_t)()
         illegal = m.Register(m.Bit)()
         pc_check = m.Register(m.Bit)()
 
@@ -191,10 +191,10 @@ class Datapath(m.Generator2):
         l_shift = self.io.dcache.resp.data.data >> l_offset
         load = m.dict_lookup({
             LD_LH: m.sext_to(m.sint(l_shift[0:16]), x_len),
-            LD_LHU: m.zext_to(l_shift[0:16], x_len),
+            LD_LHU: m.sint(m.zext_to(l_shift[0:16], x_len)),
             LD_LB: m.sext_to(m.sint(l_shift[0:8]), x_len),
-            LD_LBU: m.zext_to(l_shift[0:8], x_len)
-        }, ld_type.O, self.io.dcache.resp.data.data)
+            LD_LBU: m.sint(m.zext_to(l_shift[0:8], x_len))
+        }, ld_type.O, m.sint(self.io.dcache.resp.data.data))
 
         # CSR access
         csr.stall @= stall
@@ -211,7 +211,7 @@ class Datapath(m.Generator2):
 
         # Regfile write
         reg_write = m.dict_lookup({
-            WB_MEM: load,
+            WB_MEM: m.uint(load),
             WB_PC4: (ew_pc.O + 4),
             WB_CSR: csr.O
         }, wb_sel.O, ew_alu.O)

@@ -67,6 +67,7 @@ def test_csr():
             SYS(Funct3.CSRRC, 0, CSR.mfromhost, 0)
         ]
     )
+    print(insts)
     # print(hex(int(rand_inst)))
     # exit()
 

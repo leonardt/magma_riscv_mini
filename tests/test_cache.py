@@ -78,7 +78,7 @@ class Queue(m.Generator2):
 
 
 def make_Queue(value, entries):
-    queue = Queue(type(value.data).as_undirected(), entries)()
+    queue = Queue(type(value.data).undirected_t, entries)()
     queue.enq.valid @= value.valid
     queue.enq.data @= value.data
     value.ready @= queue.enq.ready
@@ -271,7 +271,7 @@ def test_cache():
                                        id_bits=5)
 
         dut = Cache(x_len, 1, n_sets, b_bytes)()
-        dut_mem = make_NastiIO(nasti_params).as_undirected()(name="dut_mem")
+        dut_mem = make_NastiIO(nasti_params).undirected_t(name="dut_mem")
         dut_mem.ar @= make_Queue(dut.nasti.ar, 32)
         dut_mem.aw @= make_Queue(dut.nasti.aw, 32)
         dut_mem.w @= make_Queue(dut.nasti.w, 32)
@@ -279,9 +279,9 @@ def test_cache():
         dut.nasti.r @= make_Queue(dut_mem.r, 32)
 
         gold = GoldCache(x_len, 1, n_sets, b_bytes)()
-        gold_req = type(gold.req).as_undirected()(name="gold_req")
-        gold_resp = type(gold.resp).as_undirected()(name="gold_resp")
-        gold_mem = make_NastiIO(nasti_params).as_undirected()(name="gold_mem")
+        gold_req = type(gold.req).undirected_t(name="gold_req")
+        gold_resp = type(gold.resp).undirected_t(name="gold_resp")
+        gold_mem = make_NastiIO(nasti_params).undirected_t(name="gold_mem")
         gold.req @= make_Queue(gold_req, 32)
         gold_resp @= make_Queue(gold.resp, 32)
         gold_mem.ar @= make_Queue(gold.nasti.ar, 32)

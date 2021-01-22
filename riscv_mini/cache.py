@@ -127,11 +127,11 @@ class Cache(m.Generator2):
                                  has_read_enable=True)()
                     for _ in range(n_words)]
 
-        addr_reg = m.Register(type(self.io.cpu.req.data.addr).as_undirected(),
+        addr_reg = m.Register(type(self.io.cpu.req.data.addr).undirected_t,
                               has_enable=True)()
-        cpu_data = m.Register(type(self.io.cpu.req.data.data).as_undirected(),
+        cpu_data = m.Register(type(self.io.cpu.req.data.data).undirected_t,
                               has_enable=True)()
-        cpu_mask = m.Register(type(self.io.cpu.req.data.mask).as_undirected(),
+        cpu_mask = m.Register(type(self.io.cpu.req.data.mask).undirected_t,
                               has_enable=True)()
 
         self.io.nasti.r.ready @= state.O == State.REFILL
@@ -240,7 +240,7 @@ class Cache(m.Generator2):
                        m.concat(m.bits(0, byte_offset_bits), off_reg))
         wmask = m.mux([
             m.SInt[w_bytes * 8](-1),
-            offset_mask
+            m.sint(offset_mask)
         ], ~is_alloc)
 
         if len(refill_buf.O) == 1:
