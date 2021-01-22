@@ -52,8 +52,8 @@ def J(rd, i):
 
 
 def L(funct3, rd, rs1, i):
-    if isinstance(i, BitVector) and len(i) < 11:
-        i = i.zext(11 - len(i))
+    if isinstance(i, BitVector) and len(i) < 12:
+        i = i.zext(12 - len(i))
     return concat(imm(i)[0:12], reg(rs1), funct3, reg(rd),
                   Opcode.LOAD)
 
