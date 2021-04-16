@@ -6,7 +6,7 @@ from riscv_mini.control import Control
 
 
 class Core(m.Generator2):
-    def __init__(self, x_len):
+    def __init__(self, x_len: int):
         self.io = m.IO(
             host=make_HostIO(x_len),
             icache=m.Flip(make_CacheIO(x_len)),
