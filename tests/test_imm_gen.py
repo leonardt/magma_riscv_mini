@@ -1,18 +1,20 @@
+import fault as f
 import magma as m
 import mantle
-import fault as f
+import pytest
 
 from riscv_mini.control import (Control, IMM_I, IMM_S, IMM_B, IMM_U, IMM_J,
                                 IMM_Z)
-from riscv_mini.imm_gen import ImmGenWire
+from riscv_mini.imm_gen import ImmGenWire, ImmGenMux
 
 from .utils import insts, iimm, simm, bimm, uimm, jimm, zimm
 
 
-def test_imm_gen_wire():
+@pytest.mark.parametrize('ImmGen', [ImmGenWire, ImmGenMux])
+def test_imm_gen_wire(ImmGen):
     class DUT(m.Circuit):
         io = m.IO(done=m.Out(m.Bit)) + m.ClockIO()
-        imm = ImmGenWire(32)()
+        imm = ImmGen(32)()
         ctrl = Control(32)()
 
         counter = mantle.CounterModM(len(insts), len(insts).bit_length())
