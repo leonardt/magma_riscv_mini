@@ -5,6 +5,7 @@ import fault as f
 from mantle import CounterModM, RegFileBuilder
 
 from riscv_mini.core import Core
+from riscv_mini.imm_gen import ImmGenWire, ImmGenMux
 from .utils import concat
 
 
@@ -61,7 +62,8 @@ def load_mem(lines, chunk):
 
 
 @pytest.mark.parametrize('test', [SimpleTests])  # , ISATests, BmarkTests])
-def test_core(test):
+@pytest.mark.parametrize('ImmGen', [ImmGenWire, ImmGenMux])
+def test_core(test, ImmGen):
     for t in test.tests:
         x_len = 32
         with open(f'tests/resources/{t}.hex', 'r') as file_:
@@ -70,7 +72,7 @@ def test_core(test):
 
         class DUT(m.Circuit):
             io = m.IO(done=m.Out(m.Bit)) + m.ClockIO(has_reset=True)
-            core = Core(x_len)()
+            core = Core(x_len, data_path_kwargs=m.generator.ParamDict(ImmGen=ImmGen))()
             core.host.fromhost.data.undriven()
             core.host.fromhost.valid @= False
 

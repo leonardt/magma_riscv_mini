@@ -5,15 +5,17 @@ from mantle import CounterModM, RegFileBuilder
 
 from riscv_mini.data_path import Datapath, Const
 from riscv_mini.control import Control
+from riscv_mini.imm_gen import ImmGenWire, ImmGenMux
 from .utils import tests, test_results, fin, nop
 
 
 @pytest.mark.parametrize('test', ['bypass', 'exception'])
-def test_datapath(test):
+@pytest.mark.parametrize('ImmGen', [ImmGenWire, ImmGenMux])
+def test_datapath(test, ImmGen):
     class DUT(m.Circuit):
         x_len = 32
         io = m.IO(done=m.Out(m.Bit)) + m.ClockIO(has_reset=True)
-        data_path = Datapath(x_len)()
+        data_path = Datapath(x_len, ImmGen=ImmGen)()
         control = Control(x_len)()
         for name, value in data_path.ctrl.items():
             m.wire(value, getattr(control, name))
