@@ -72,7 +72,8 @@ def test_core(test, ImmGen):
 
         class DUT(m.Circuit):
             io = m.IO(done=m.Out(m.Bit)) + m.ClockIO(has_reset=True)
-            core = Core(x_len, data_path_kwargs=m.generator.ParamDict(ImmGen=ImmGen))()
+            core = Core(x_len,
+                        data_path_kwargs=m.generator.ParamDict(ImmGen=ImmGen))()
             core.host.fromhost.data.undriven()
             core.host.fromhost.valid @= False
 
