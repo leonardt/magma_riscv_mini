@@ -277,13 +277,14 @@ class Cache(m.Generator2):
             # m.display("[%0t]: wmask = %x, %x, %x, %x", m.time(),
             #           *mem.WMASK.value()).when(m.posedge(self.io.CLK)).if_(wen)
 
-        tag_and_idx = m.zext_to(m.concat(idx_reg, tag_reg),
+        tag_and_idx = m.zext_to(m.concat2(idx_reg, tag_reg),
                                 nasti_params.x_addr_bits)
+        print(tag_and_idx.trace())
         self.io.nasti.ar.data @= NastiReadAddressChannel(
             nasti_params, 0, tag_and_idx << m.Bits[len(tag_and_idx)](b_len),
             m.bitutils.clog2(nasti_params.x_data_bits // 8), data_beats - 1)
 
-        rmeta_and_idx = m.zext_to(m.concat(idx_reg, rmeta.tag),
+        rmeta_and_idx = m.zext_to(m.concat2(idx_reg, rmeta.tag),
                                   nasti_params.x_addr_bits)
         self.io.nasti.aw.data @= NastiWriteAddressChannel(
             nasti_params, 0, rmeta_and_idx <<
