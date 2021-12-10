@@ -42,9 +42,9 @@ class ALUSimple(ALUBase):
             elif io.op == ALUOP.SLL:
                 io.O @= io.A << io.B
             elif io.op == ALUOP.SLT:
-                io.O @= m.uint(m.sint(io.A) < m.sint(io.B), 16)
+                io.O @= m.uint(m.sint(io.A) < m.sint(io.B), x_len)
             elif io.op == ALUOP.SLTU:
-                io.O @= m.uint(io.A < io.B, 16)
+                io.O @= m.uint(io.A < io.B, x_len)
             elif io.op == ALUOP.AND:
                 io.O @= io.A & io.B
             elif io.op == ALUOP.OR:
@@ -67,8 +67,11 @@ class ALUArea(ALUBase):
         cmp = m.uint(m.mux([m.mux([io.A[-1], io.B[-1]], io.op[1]), sum_[-1]],
                            io.A[-1] == io.B[-1]), x_len)
         shin = m.mux([io.A[::-1], io.A], io.op[3])
+        x = m.sint(
+            m.concat2(shin, m.Bits[1](io.op[0] & shin[x_len - 1]))
+        ) >> m.sint(m.zext(io.B, 1))
         shiftr = m.uint(m.sint(
-            m.concat(shin, io.op[0] & shin[x_len - 1])
+            m.concat2(shin, m.Bits[1](io.op[0] & shin[x_len - 1]))
         ) >> m.sint(m.zext(io.B, 1)))[:x_len]
         shiftl = shiftr[::-1]
 
