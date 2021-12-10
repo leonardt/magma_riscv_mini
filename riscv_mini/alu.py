@@ -42,9 +42,9 @@ class ALUSimple(ALUBase):
             elif io.op == ALUOP.SLL:
                 io.O @= io.A << io.B
             elif io.op == ALUOP.SLT:
-                io.O @= m.uint(m.sint(io.A) < m.sint(io.B), 16)
+                io.O @= m.uint(m.sint(io.A) < m.sint(io.B), x_len)
             elif io.op == ALUOP.SLTU:
-                io.O @= m.uint(io.A < io.B, 16)
+                io.O @= m.uint(io.A < io.B, x_len)
             elif io.op == ALUOP.AND:
                 io.O @= io.A & io.B
             elif io.op == ALUOP.OR:
