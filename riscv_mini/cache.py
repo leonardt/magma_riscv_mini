@@ -236,8 +236,13 @@ class Cache(m.Generator2):
         wmeta = MetaData(name="wmeta")
         wmeta.tag @= tag_reg
 
-        offset_mask = (m.zext_to(cpu_mask.O, w_bytes * 8) <<
-                       m.concat(m.bits(0, byte_offset_bits), off_reg))
+        offset_mask = (
+            m.zext_to(cpu_mask.O, w_bytes * 8) <<
+            m.zext_to(
+                m.concat(m.bits(0, byte_offset_bits), off_reg),
+                w_bytes * 8
+            )
+        )
         wmask = m.mux([
             m.SInt[w_bytes * 8](-1),
             m.sint(offset_mask)
