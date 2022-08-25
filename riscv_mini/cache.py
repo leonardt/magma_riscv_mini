@@ -317,63 +317,61 @@ class Cache(m.Generator2):
         b_ready = m.Bit(name="b_ready")
         self.io.nasti.b.ready @= b_ready
 
-        @m.inline_combinational()
-        def logic():
-            state.I @= state.O
-            aw_valid @= False
-            ar_valid @= False
-            self.io.nasti.w.valid @= False
-            b_ready @= False
-            if state.O == State.IDLE:
-                if self.io.cpu.req.valid:
-                    if self.io.cpu.req.data.mask.reduce_or():
+        state.I @= state.O
+        aw_valid @= False
+        ar_valid @= False
+        self.io.nasti.w.valid @= False
+        b_ready @= False
+        with m.when(state.O == State.IDLE):
+            with m.when(self.io.cpu.req.valid):
+                with m.when(self.io.cpu.req.data.mask.reduce_or()):
+                    state.I @= State.WRITE_CACHE
+                with m.otherwise():
+                    state.I @= State.READ_CACHE
+        with m.elsewhen(state.O == State.READ_CACHE):
+            with m.when(hit):
+                with m.when(self.io.cpu.req.valid):
+                    with m.when(self.io.cpu.req.data.mask.reduce_or()):
                         state.I @= State.WRITE_CACHE
-                    else:
+                    with m.otherwise():
                         state.I @= State.READ_CACHE
-            elif state.O == State.READ_CACHE:
-                if hit:
-                    if self.io.cpu.req.valid:
-                        if self.io.cpu.req.data.mask.reduce_or():
-                            state.I @= State.WRITE_CACHE
-                        else:
-                            state.I @= State.READ_CACHE
-                    else:
-                        state.I @= State.IDLE
-                else:
-                    aw_valid @= is_dirty
-                    ar_valid @= ~is_dirty
-                    if self.io.nasti.aw.fired():
-                        state.I @= State.WRITE_BACK
-                    elif self.io.nasti.ar.fired():
-                        state.I @= State.REFILL
-            elif state.O == State.WRITE_CACHE:
-                if hit | is_alloc_reg | self.io.cpu.abort:
+                with m.otherwise():
                     state.I @= State.IDLE
-                else:
-                    aw_valid @= is_dirty
-                    ar_valid @= ~is_dirty
-                    if self.io.nasti.aw.fired():
-                        state.I @= State.WRITE_BACK
-                    elif self.io.nasti.ar.fired():
-                        state.I @= State.REFILL
-            elif state.O == State.WRITE_BACK:
-                self.io.nasti.w.valid @= True
-                if write_wrap_out:
-                    state.I @= State.WRITE_ACK
-            elif state.O == State.WRITE_ACK:
-                b_ready @= True
-                if self.io.nasti.b.fired():
-                    state.I @= State.REFILL_READY
-            elif state.O == State.REFILL_READY:
-                ar_valid @= True
-                if self.io.nasti.ar.fired():
+            with m.otherwise():
+                aw_valid @= is_dirty
+                ar_valid @= ~is_dirty
+                with m.when(self.io.nasti.aw.fired()):
+                    state.I @= State.WRITE_BACK
+                with m.elsewhen(self.io.nasti.ar.fired()):
                     state.I @= State.REFILL
-            elif state.O == State.REFILL:
-                if read_wrap_out:
-                    if cpu_mask.O.reduce_or():
-                        state.I @= State.WRITE_CACHE
-                    else:
-                        state.I @= State.IDLE
+        with m.elsewhen(state.O == State.WRITE_CACHE):
+            with m.when(hit | is_alloc_reg | self.io.cpu.abort):
+                state.I @= State.IDLE
+            with m.otherwise():
+                aw_valid @= is_dirty
+                ar_valid @= ~is_dirty
+                with m.when(self.io.nasti.aw.fired()):
+                    state.I @= State.WRITE_BACK
+                with m.elsewhen(self.io.nasti.ar.fired()):
+                    state.I @= State.REFILL
+        with m.elsewhen(state.O == State.WRITE_BACK):
+            self.io.nasti.w.valid @= True
+            with m.when(write_wrap_out):
+                state.I @= State.WRITE_ACK
+        with m.elsewhen(state.O == State.WRITE_ACK):
+            b_ready @= True
+            with m.when(self.io.nasti.b.fired()):
+                state.I @= State.REFILL_READY
+        with m.elsewhen(state.O == State.REFILL_READY):
+            ar_valid @= True
+            with m.when(self.io.nasti.ar.fired()):
+                state.I @= State.REFILL
+        with m.elsewhen(state.O == State.REFILL):
+            with m.when(read_wrap_out):
+                with m.when(cpu_mask.O.reduce_or()):
+                    state.I @= State.WRITE_CACHE
+                with m.otherwise():
+                    state.I @= State.IDLE
 
         if data_beats > 1:
             # TODO: Have to do this at the end since the inline comb logic

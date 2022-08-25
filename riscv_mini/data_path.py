@@ -151,39 +151,37 @@ class Datapath(m.Generator2):
         }, m.mux([self.io.ctrl.st_type, st_type.O], stall), m.bits(0, 4))
 
         # Pipelining
-        @m.inline_combinational()
-        def pipeline_logic():
-            ew_pc.I @= ew_pc.O
-            ew_inst.I @= ew_inst.O
-            ew_alu.I @= ew_alu.O
-            csr_in.I @= csr_in.O
-            st_type.I @= st_type.O
-            ld_type.I @= ld_type.O
-            wb_sel.I @= wb_sel.O
-            wb_en.I @= wb_en.O
-            csr_cmd.I @= csr_cmd.O
-            illegal.I @= illegal.O
-            pc_check.I @= pc_check.O
-            if m.bit(self.io.RESET) | ~stall & csr.expt:
-                st_type.I @= 0
-                ld_type.I @= 0
-                wb_en.I @= 0
-                csr_cmd.I @= 0
-                illegal.I @= False
-                pc_check.I @= False
-            elif ~stall & ~csr.expt:
-                ew_pc.I @= fe_pc.O
-                ew_inst.I @= fe_inst.O
-                ew_alu.I @= alu.O
-                csr_in.I @= m.mux([rs1, imm_gen.O],
-                                  self.io.ctrl.imm_sel == IMM_Z)
-                st_type.I @= self.io.ctrl.st_type
-                ld_type.I @= self.io.ctrl.ld_type
-                wb_sel.I @= self.io.ctrl.wb_sel
-                wb_en.I @= self.io.ctrl.wb_en
-                csr_cmd.I @= self.io.ctrl.csr_cmd
-                illegal.I @= self.io.ctrl.illegal
-                pc_check.I @= self.io.ctrl.pc_sel == PC_ALU
+        ew_pc.I @= ew_pc.O
+        ew_inst.I @= ew_inst.O
+        ew_alu.I @= ew_alu.O
+        csr_in.I @= csr_in.O
+        st_type.I @= st_type.O
+        ld_type.I @= ld_type.O
+        wb_sel.I @= wb_sel.O
+        wb_en.I @= wb_en.O
+        csr_cmd.I @= csr_cmd.O
+        illegal.I @= illegal.O
+        pc_check.I @= pc_check.O
+        with m.when(m.bit(self.io.RESET) | ~stall & csr.expt):
+            st_type.I @= 0
+            ld_type.I @= 0
+            wb_en.I @= 0
+            csr_cmd.I @= 0
+            illegal.I @= False
+            pc_check.I @= False
+        with m.elsewhen(~stall & ~csr.expt):
+            ew_pc.I @= fe_pc.O
+            ew_inst.I @= fe_inst.O
+            ew_alu.I @= alu.O
+            csr_in.I @= m.mux([rs1, imm_gen.O],
+                              self.io.ctrl.imm_sel == IMM_Z)
+            st_type.I @= self.io.ctrl.st_type
+            ld_type.I @= self.io.ctrl.ld_type
+            wb_sel.I @= self.io.ctrl.wb_sel
+            wb_en.I @= self.io.ctrl.wb_en
+            csr_cmd.I @= self.io.ctrl.csr_cmd
+            illegal.I @= self.io.ctrl.illegal
+            pc_check.I @= self.io.ctrl.pc_sel == PC_ALU
 
         # Load
         l_offset = ((m.uint(ew_alu.O[1], x_len) << 4) |
