@@ -25,6 +25,7 @@ jobs:
     - name: Install Python packages
       shell: bash -l {0}
       run: |
+          pip install -e git://github.com/phanrahan/magma.git#egg=magma-lang
           pip install -e git://github.com/phanrahan/mantle.git#egg=mantle
 
           pip install pytest pytest-pycodestyle
