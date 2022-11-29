@@ -564,6 +564,6 @@ def test_cache():
     tester = f.Tester(DUT, DUT.CLK)
     tester.wait_until_high(DUT.done)
     tester.compile_and_run("verilator", magma_opts={"flatten_all_tuples": True},
-                           flags=['-Wno-unused', '--assert'],
+                           flags=['-Wno-unused', '--assert', '-Wno-width'],
                            disp_type="realtime",
                            magma_output="mlir-verilog")
