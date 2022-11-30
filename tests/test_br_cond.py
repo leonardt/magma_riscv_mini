@@ -1,7 +1,7 @@
 import pytest
 
 import magma as m
-from mantle import CounterModM
+import mantle2
 import fault
 from hwtypes import BitVector as BV
 
@@ -40,7 +40,7 @@ def test_br_cond(BrCond):
         ] * 10
 
         n = len(insts)
-        counter = CounterModM(n, n.bit_length())
+        counter = mantle2.CounterTo(n)()
         control.inst @= m.mux(insts, counter.O)
         io.done @= counter.COUT
 

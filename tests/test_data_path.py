@@ -1,7 +1,8 @@
 import pytest
 import fault as f
 import magma as m
-from mantle import CounterModM, RegFileBuilder
+from mantle import RegFileBuilder
+import mantle2
 
 from riscv_mini.data_path import Datapath, Const
 from riscv_mini.control import Control
@@ -26,7 +27,7 @@ def test_datapath(test, ImmGen):
         INIT, RUN = False, True
         state = m.Register(init=INIT)()
         n = len(insts)
-        counter = CounterModM(n, n.bit_length(), has_ce=True)
+        counter = mantle2.CounterTo(n, has_enable=True)()
         counter.CE @= m.enable(state.O == INIT)
         cntr, done = counter.O, counter.COUT
         timeout = m.Register(m.Bits[x_len])()

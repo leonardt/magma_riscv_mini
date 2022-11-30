@@ -2,7 +2,7 @@ import itertools
 import random
 from hwtypes import BitVector
 import magma as m
-import mantle
+from mantle2.counter import CounterTo
 import fault as f
 
 from riscv_mini.nasti import (make_NastiIO, NastiParameters,
@@ -26,10 +26,8 @@ class Queue(m.Generator2):
         ) + m.ClockIO()
 
         ram = m.Memory(entries, T)()
-        enq_ptr = mantle.CounterModM(entries, entries.bit_length(),
-                                     has_ce=True, cout=False)
-        deq_ptr = mantle.CounterModM(entries, entries.bit_length(),
-                                     has_ce=True, cout=False)
+        enq_ptr = CounterTo(entries, has_enable=True, has_cout=False)()
+        deq_ptr = CounterTo(entries, has_enable=True, has_cout=False)()
         maybe_full = m.Register(init=False, has_enable=True)()
 
         ptr_match = enq_ptr.O == deq_ptr.O
@@ -131,15 +129,11 @@ class GoldCache(m.Generator2):
 
         state = m.Register(init=State.IDLE)()
 
-        write_counter = mantle.CounterModM(data_beats,
-                                           max(data_beats.bit_length(), 1),
-                                           has_ce=True)
+        write_counter = CounterTo(data_beats, has_enable=True)()
         write_counter.CE @= m.enable(state.O == State.WRITE)
         w_cnt, w_done = write_counter.O, write_counter.COUT
 
-        read_counter = mantle.CounterModM(data_beats,
-                                          max(data_beats.bit_length(), 1),
-                                          has_ce=True)
+        read_counter = CounterTo(data_beats, has_enable=True)()
         read_counter.CE @= m.enable((state.O == State.READ) &
                                     self.io.nasti.r.valid)
         r_cnt, r_done = read_counter.O, read_counter.COUT
@@ -304,12 +298,10 @@ def test_cache():
 
         mem_state = m.Register(init=MemState.IDLE)()
 
-        write_counter = mantle.CounterModM(data_beats, data_beats.bit_length(),
-                                           has_ce=True)
+        write_counter = CounterTo(data_beats, has_enable=True)()
         write_counter.CE @= m.enable((mem_state.O == MemState.WRITE) &
                                      dut_mem.w.valid & gold_mem.w.valid)
-        read_counter = mantle.CounterModM(data_beats, data_beats.bit_length(),
-                                          has_ce=True)
+        read_counter = CounterTo(data_beats, has_enable=True)()
         read_counter.CE @= m.enable((mem_state.O == MemState.READ) &
                                     dut_mem.r.ready & gold_mem.r.ready)
 
@@ -485,13 +477,11 @@ def test_cache():
         state = m.Register(init=TestState.INIT)()
         timeout = m.Register(m.UInt[32])()
         init_m = len(init_addr) - 1
-        init_counter = mantle.CounterModM(init_m, init_m.bit_length(),
-                                          has_ce=True)
+        init_counter = CounterTo(init_m, has_enable=True)()
         init_counter.CE @= m.enable(state.O == TestState.INIT)
 
         test_m = len(test_vec) - 1
-        test_counter = mantle.CounterModM(test_m, test_m.bit_length(),
-                                          has_ce=True)
+        test_counter = CounterTo(test_m, has_enable=True)()
         test_counter.CE @= m.enable(state.O == TestState.DONE)
         curr_vec = m.mux(test_vec, test_counter.O)
         mask = (curr_vec >> (b_len + s_len + t_len + b_bits))[:x_len // 8]

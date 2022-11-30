@@ -1,7 +1,7 @@
 import fault
 import magma as m
 # m.config.set_debug_mode(True)
-from mantle import CounterModM
+import mantle2
 from riscv_mini.csr import CSR
 from riscv_mini.csr_gen import CSRGen, make_Cause
 import riscv_mini.control as Control
@@ -105,7 +105,7 @@ def test_csr():
         csr = CSRGen(x_len)()
         ctrl = Control.Control(x_len)()
 
-        counter = CounterModM(n, n.bit_length())
+        counter = mantle2.CounterTo(n)()
         inst = m.mux(insts, counter.O)
         ctrl.inst @= inst
         csr.inst @= inst
