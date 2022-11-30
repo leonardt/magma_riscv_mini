@@ -220,6 +220,7 @@ class CSRGen(m.Generator2):
         with m.when(is_inst_ret & instret.O.reduce_and()):
             instreth.I @= instreth.O + 1
 
+        mbadaddr.I @= mbadaddr.O
         mepc.I @= mepc.O
         mcause.I @= mcause.O
         PRV.I @= PRV.O
