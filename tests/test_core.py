@@ -3,7 +3,7 @@ from hwtypes import BitVector
 import magma as m
 import fault as f
 from mantle import RegFileBuilder
-import mantle2
+from mantle2.counter import Counter
 
 from riscv_mini.core import Core
 from riscv_mini.imm_gen import ImmGenWire, ImmGenMux
@@ -91,7 +91,7 @@ def test_core(test, ImmGen):
             cycle = m.Register(m.UInt[32])()
 
             n = len(_hex)
-            counter = mantle2.CounterTo(n, has_enable=True)()
+            counter = Counter(n, has_enable=True, has_cout=True)()
             counter.CE @= m.enable(state.O == INIT)
             cntr, done = counter.O, counter.COUT
 

@@ -1,6 +1,6 @@
 import fault as f
 import magma as m
-import mantle2
+from mantle2.counter import Counter
 import pytest
 
 from riscv_mini.control import (Control, IMM_I, IMM_S, IMM_B, IMM_U, IMM_J,
@@ -17,7 +17,7 @@ def test_imm_gen_wire(ImmGen):
         imm = ImmGen(32)()
         ctrl = Control(32)()
 
-        counter = mantle2.CounterTo(len(insts))()
+        counter = Counter(len(insts), has_cout=True)()
         i = m.mux([iimm(i) for i in insts], counter.O)
         s = m.mux([simm(i) for i in insts], counter.O)
         b = m.mux([bimm(i) for i in insts], counter.O)

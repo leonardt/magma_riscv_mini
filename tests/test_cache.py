@@ -2,7 +2,7 @@ import itertools
 import random
 from hwtypes import BitVector
 import magma as m
-from mantle2.counter import CounterTo
+from mantle2.counter import Counter
 import fault as f
 
 from riscv_mini.nasti import (make_NastiIO, NastiParameters,
@@ -26,8 +26,8 @@ class Queue(m.Generator2):
         ) + m.ClockIO()
 
         ram = m.Memory(entries, T)()
-        enq_ptr = CounterTo(entries, has_enable=True, has_cout=False)()
-        deq_ptr = CounterTo(entries, has_enable=True, has_cout=False)()
+        enq_ptr = Counter(entries, has_enable=True, has_cout=False)()
+        deq_ptr = Counter(entries, has_enable=True, has_cout=False)()
         maybe_full = m.Register(init=False, has_enable=True)()
 
         ptr_match = enq_ptr.O == deq_ptr.O
@@ -40,14 +40,14 @@ class Queue(m.Generator2):
         do_enq = self.io.enq.fired()
         do_deq = self.io.deq.fired()
 
-        ram.write(self.io.enq.data, enq_ptr.O[:-1], m.enable(do_enq))
+        ram.write(self.io.enq.data, enq_ptr.O, m.enable(do_enq))
 
         enq_ptr.CE @= m.enable(do_enq)
         deq_ptr.CE @= m.enable(do_deq)
 
         maybe_full.I @= m.enable(do_enq)
         maybe_full.CE @= m.enable(do_enq != do_deq)
-        self.io.deq.data @= ram[deq_ptr.O[:-1]]
+        self.io.deq.data @= ram[deq_ptr.O]
 
         if flow:
             raise NotImplementedError()
@@ -129,11 +129,11 @@ class GoldCache(m.Generator2):
 
         state = m.Register(init=State.IDLE)()
 
-        write_counter = CounterTo(data_beats, has_enable=True, has_cout=True)()
+        write_counter = Counter(data_beats, has_enable=True, has_cout=True)()
         write_counter.CE @= m.enable(state.O == State.WRITE)
         w_cnt, w_done = write_counter.O, write_counter.COUT
 
-        read_counter = CounterTo(data_beats, has_enable=True, has_cout=True)()
+        read_counter = Counter(data_beats, has_enable=True, has_cout=True)()
         read_counter.CE @= m.enable((state.O == State.READ) &
                                     self.io.nasti.r.valid)
         r_cnt, r_done = read_counter.O, read_counter.COUT
@@ -298,10 +298,10 @@ def test_cache():
 
         mem_state = m.Register(init=MemState.IDLE)()
 
-        write_counter = CounterTo(data_beats, has_enable=True, has_cout=True)()
+        write_counter = Counter(data_beats, has_enable=True, has_cout=True)()
         write_counter.CE @= m.enable((mem_state.O == MemState.WRITE) &
                                      dut_mem.w.valid & gold_mem.w.valid)
-        read_counter = CounterTo(data_beats, has_enable=True, has_cout=True)()
+        read_counter = Counter(data_beats, has_enable=True, has_cout=True)()
         read_counter.CE @= m.enable((mem_state.O == MemState.READ) &
                                     dut_mem.r.ready & gold_mem.r.ready)
 
@@ -476,12 +476,12 @@ def test_cache():
 
         state = m.Register(init=TestState.INIT)()
         timeout = m.Register(m.UInt[32])()
-        init_m = len(init_addr) - 1
-        init_counter = CounterTo(init_m, has_enable=True, has_cout=True)()
+        init_m = len(init_addr)
+        init_counter = Counter(init_m, has_enable=True, has_cout=True)()
         init_counter.CE @= m.enable(state.O == TestState.INIT)
 
-        test_m = len(test_vec) - 1
-        test_counter = CounterTo(test_m, has_enable=True, has_cout=True)()
+        test_m = len(test_vec)
+        test_counter = Counter(test_m, has_enable=True, has_cout=True)()
         test_counter.CE @= m.enable(state.O == TestState.DONE)
         curr_vec = m.mux(test_vec, test_counter.O)
         mask = (curr_vec >> (b_len + s_len + t_len + b_bits))[:x_len // 8]

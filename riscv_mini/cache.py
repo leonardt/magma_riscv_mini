@@ -1,5 +1,5 @@
 import magma as m
-from mantle2.counter import CounterTo
+from mantle2.counter import Counter
 from riscv_mini.nasti import (make_NastiIO, NastiParameters,
                               NastiReadAddressChannel,
                               NastiWriteAddressChannel, NastiWriteDataChannel)
@@ -138,12 +138,12 @@ class Cache(m.Generator2):
         # Counters
         assert data_beats > 0
         if data_beats > 1:
-            read_counter = CounterTo(
+            read_counter = Counter(
                 data_beats, has_enable=True, has_cout=True)()
             read_counter.CE @= m.enable(self.io.nasti.r.fired())
             read_count, read_wrap_out = read_counter.O, read_counter.COUT
 
-            write_counter = CounterTo(
+            write_counter = Counter(
                 data_beats, has_enable=True, has_cout=True)()
             write_count, write_wrap_out = write_counter.O, write_counter.COUT
         else:
@@ -159,7 +159,7 @@ class Cache(m.Generator2):
         else:
             refill_buf.I @= m.set_index(refill_buf.O,
                                         self.io.nasti.r.data.data,
-                                        read_count[:-1])
+                                        read_count)
         refill_buf.CE @= m.enable(self.io.nasti.r.fired())
 
         is_idle = state.O == State.IDLE
@@ -299,7 +299,7 @@ class Cache(m.Generator2):
                 [read[i * nasti_params.x_data_bits:
                       (i + 1) * nasti_params.x_data_bits]
                  for i in range(data_beats)]
-            )[write_count[:-1]],
+            )[write_count],
             None, write_wrap_out
         )
 
