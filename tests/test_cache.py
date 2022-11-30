@@ -129,11 +129,11 @@ class GoldCache(m.Generator2):
 
         state = m.Register(init=State.IDLE)()
 
-        write_counter = CounterTo(data_beats, has_enable=True)()
+        write_counter = CounterTo(data_beats, has_enable=True, has_cout=True)()
         write_counter.CE @= m.enable(state.O == State.WRITE)
         w_cnt, w_done = write_counter.O, write_counter.COUT
 
-        read_counter = CounterTo(data_beats, has_enable=True)()
+        read_counter = CounterTo(data_beats, has_enable=True, has_cout=True)()
         read_counter.CE @= m.enable((state.O == State.READ) &
                                     self.io.nasti.r.valid)
         r_cnt, r_done = read_counter.O, read_counter.COUT
@@ -298,10 +298,10 @@ def test_cache():
 
         mem_state = m.Register(init=MemState.IDLE)()
 
-        write_counter = CounterTo(data_beats, has_enable=True)()
+        write_counter = CounterTo(data_beats, has_enable=True, has_cout=True)()
         write_counter.CE @= m.enable((mem_state.O == MemState.WRITE) &
                                      dut_mem.w.valid & gold_mem.w.valid)
-        read_counter = CounterTo(data_beats, has_enable=True)()
+        read_counter = CounterTo(data_beats, has_enable=True, has_cout=True)()
         read_counter.CE @= m.enable((mem_state.O == MemState.READ) &
                                     dut_mem.r.ready & gold_mem.r.ready)
 
@@ -477,11 +477,11 @@ def test_cache():
         state = m.Register(init=TestState.INIT)()
         timeout = m.Register(m.UInt[32])()
         init_m = len(init_addr) - 1
-        init_counter = CounterTo(init_m, has_enable=True)()
+        init_counter = CounterTo(init_m, has_enable=True, has_cout=True)()
         init_counter.CE @= m.enable(state.O == TestState.INIT)
 
         test_m = len(test_vec) - 1
-        test_counter = CounterTo(test_m, has_enable=True)()
+        test_counter = CounterTo(test_m, has_enable=True, has_cout=True)()
         test_counter.CE @= m.enable(state.O == TestState.DONE)
         curr_vec = m.mux(test_vec, test_counter.O)
         mask = (curr_vec >> (b_len + s_len + t_len + b_bits))[:x_len // 8]
@@ -511,28 +511,26 @@ def test_cache():
                 .when(m.posedge(io.CLK))\
                 .if_(state.O == TestState.INIT)
 
-        @m.inline_combinational()
-        def state_fsm():
-            timeout.I @= timeout.O
-            mem_wen1 @= m.bit(False)
-            check_resp_data @= m.bit(False)
-            state.I @= state.O
-            if state.O == TestState.INIT:
-                mem_wen1 @= m.bit(True)
-                if init_counter.COUT:
-                    state.I @= TestState.START
-            elif state.O == TestState.START:
-                if gold_req.ready:
-                    timeout.I @= m.bits(0, 32)
-                    state.I @= TestState.WAIT
-            elif state.O == TestState.WAIT:
-                timeout.I @= timeout.O + 1
-                if dut.cpu.resp.valid & gold_resp.valid:
-                    if ~mask.reduce_or():
-                        check_resp_data @= m.bit(True)
-                    state.I @= TestState.DONE
-            elif state.O == TestState.DONE:
+        timeout.I @= timeout.O
+        mem_wen1 @= m.bit(False)
+        check_resp_data @= m.bit(False)
+        state.I @= state.O
+        with m.when(state.O == TestState.INIT):
+            mem_wen1 @= m.bit(True)
+            with m.when(init_counter.COUT):
                 state.I @= TestState.START
+        with m.elsewhen(state.O == TestState.START):
+            with m.when(gold_req.ready):
+                timeout.I @= m.bits(0, 32)
+                state.I @= TestState.WAIT
+        with m.elsewhen(state.O == TestState.WAIT):
+            timeout.I @= timeout.O + 1
+            with m.when(dut.cpu.resp.valid & gold_resp.valid):
+                with m.when(~mask.reduce_or()):
+                    check_resp_data @= m.bit(True)
+                state.I @= TestState.DONE
+        with m.elsewhen(state.O == TestState.DONE):
+            state.I @= TestState.START
 
         f.assert_immediate((state.O != TestState.WAIT) | (timeout.O < 100))
         f.assert_immediate(~check_resp_data | (dut.cpu.resp.data.data ==
@@ -554,6 +552,7 @@ def test_cache():
     tester = f.Tester(DUT, DUT.CLK)
     tester.wait_until_high(DUT.done)
     tester.compile_and_run("verilator", magma_opts={"flatten_all_tuples": True},
-                           flags=['-Wno-unused', '--assert', '-Wno-width'],
+                           flags=['-Wno-unused', '--assert',
+                                  '-Wno-width', '-Wno-latch'],
                            disp_type="realtime",
                            magma_output="mlir-verilog")

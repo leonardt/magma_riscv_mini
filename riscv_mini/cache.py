@@ -138,11 +138,13 @@ class Cache(m.Generator2):
         # Counters
         assert data_beats > 0
         if data_beats > 1:
-            read_counter = CounterTo(data_beats, has_enable=True)()
+            read_counter = CounterTo(
+                data_beats, has_enable=True, has_cout=True)()
             read_counter.CE @= m.enable(self.io.nasti.r.fired())
             read_count, read_wrap_out = read_counter.O, read_counter.COUT
 
-            write_counter = CounterTo(data_beats, has_enable=True)()
+            write_counter = CounterTo(
+                data_beats, has_enable=True, has_cout=True)()
             write_count, write_wrap_out = write_counter.O, write_counter.COUT
         else:
             read_count, read_wrap_out = 0, 1
