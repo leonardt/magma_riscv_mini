@@ -1,7 +1,7 @@
 import fault
 import magma as m
 # m.config.set_debug_mode(True)
-from mantle2.counter import Counter
+from mantle import CounterModM
 from riscv_mini.csr import CSR
 from riscv_mini.csr_gen import CSRGen, make_Cause
 import riscv_mini.control as Control
@@ -13,6 +13,19 @@ from hwtypes import BitVector as BV
 from .utils import (I, rand_fn3, rand_rs1, rand_rs2, SYS, J, L, rand_rd, JR,
                     rand_inst, csr, rs1, nop)
 from .opcode import Funct3
+
+
+def update_when(reg, value, cond):
+    if reg.I.driven():
+        default = reg.I.value()
+        reg.I.unwire(default)
+    else:
+        default = reg.O
+    reg.I @= m.mux([default, value], cond)
+
+
+def incr_when(reg, cond):
+    update_when(reg, reg.O + 1, cond)
 
 
 def test_csr():
@@ -92,7 +105,7 @@ def test_csr():
         csr = CSRGen(x_len)()
         ctrl = Control.Control(x_len)()
 
-        counter = Counter(n, has_cout=True)()
+        counter = CounterModM(n, n.bit_length())
         inst = m.mux(insts, counter.O)
         ctrl.inst @= inst
         csr.inst @= inst
@@ -191,97 +204,110 @@ def test_csr():
         # mtime_reg = regs[CSR.mtime]
         # mtime_reg.I @= m.mux([mtime_reg.O, mtime_reg.O + 1], time_max)
 
-        with m.when(time_max):
-            regs[CSR.mtime].I @= regs[CSR.mtime].O + 1
-            regs[CSR.timeh].I @= regs[CSR.timeh].O + 1
-            regs[CSR.timehw].I @= regs[CSR.timehw].O + 1
+        incr_when(regs[CSR.timeh], time_max)
+        incr_when(regs[CSR.timehw], time_max)
 
         cycle_max = regs[CSR.cycle].O.reduce_and()
-        with m.when(cycle_max):
-            regs[CSR.cycleh].I @= regs[CSR.cycleh].O + 1
-            regs[CSR.cyclehw].I @= regs[CSR.cyclehw].O + 1
+
+        incr_when(regs[CSR.cycleh], cycle_max)
+        incr_when(regs[CSR.cyclehw], cycle_max)
+
+        incr_when(regs[CSR.instret], instret)
+        incr_when(regs[CSR.instretw], instret)
 
         instret_max = regs[CSR.instret].O.reduce_and()
-        with m.when(instret):
-            regs[CSR.instret].I @= regs[CSR.instret].O + 1
-            regs[CSR.instretw].I @= regs[CSR.instretw].O + 1
-            with m.when(instret_max):
-                regs[CSR.instreth].I @= regs[CSR.instreth].O + 1
-                regs[CSR.instrethw].I @= regs[CSR.instrethw].O + 1
+        incr_when(regs[CSR.instreth], instret & instret_max)
+        incr_when(regs[CSR.instrethw], instret & instret_max)
 
-        with m.when(exception):
-            regs[CSR.mepc].I @= (csr.pc.value() >> 2) << 2
-            regs[CSR.mstatus].I @= (prv << 4) | (ie << 3) | (CSR.PRV_M.zext(30) << 1)
-            Cause = make_Cause(x_len)
-            regs[CSR.mcause].I @= m.mux([
+        cond = ~exception & ~is_eret & wen
+        # Assuming these are mutually exclusive, so we don't need chained
+        # elsewhen
+        update_when(regs[CSR.mstatus], m.zext_to(wdata[0:6], 32),
+                    cond & (csr_addr == CSR.mstatus))
+        update_when(regs[CSR.mip],
+                    (m.bits(wdata[7], 32) << 7) | (m.bits(wdata[3], 32) << 3),
+                    cond & (csr_addr == CSR.mip))
+        update_when(regs[CSR.mie],
+                    (m.bits(wdata[7], 32) << 7) | (m.bits(wdata[3], 32) << 3),
+                    cond & (csr_addr == CSR.mie))
+        update_when(regs[CSR.mepc], (wdata >> 2) << 2,
+                    cond & (csr_addr == CSR.mepc))
+        update_when(regs[CSR.mcause], wdata & (1 << 31 | 0xf),
+                    cond & (csr_addr == CSR.mcause))
+        update_when(regs[CSR.time], wdata,
+                    cond & ((csr_addr == CSR.timew) | (csr_addr == CSR.mtime)))
+        update_when(regs[CSR.timew], wdata,
+                    cond & ((csr_addr == CSR.timew) | (csr_addr == CSR.mtime)))
+        update_when(regs[CSR.mtime], wdata,
+                    cond & ((csr_addr == CSR.timew) | (csr_addr == CSR.mtime)))
+        update_when(regs[CSR.timeh], wdata,
+                    cond & ((csr_addr == CSR.timehw) |
+                            (csr_addr == CSR.mtimeh)))
+        update_when(regs[CSR.timehw], wdata,
+                    cond & ((csr_addr == CSR.timehw) |
+                            (csr_addr == CSR.mtimeh)))
+        update_when(regs[CSR.mtimeh], wdata,
+                    cond & ((csr_addr == CSR.timehw) |
+                            (csr_addr == CSR.mtimeh)))
+        update_when(regs[CSR.cycle], wdata,
+                    cond & (csr_addr == CSR.cyclew))
+        update_when(regs[CSR.cyclew], wdata,
+                    cond & (csr_addr == CSR.cyclew))
+        update_when(regs[CSR.cycleh], wdata,
+                    cond & (csr_addr == CSR.cyclehw))
+        update_when(regs[CSR.cyclehw], wdata,
+                    cond & (csr_addr == CSR.cyclehw))
+        update_when(regs[CSR.instret], wdata,
+                    cond & (csr_addr == CSR.instretw))
+        update_when(regs[CSR.instretw], wdata,
+                    cond & (csr_addr == CSR.instretw))
+        update_when(regs[CSR.instreth], wdata,
+                    cond & (csr_addr == CSR.instrethw))
+        update_when(regs[CSR.instrethw], wdata,
+                    cond & (csr_addr == CSR.instrethw))
+        update_when(regs[CSR.mtimecmp], wdata,
+                    cond & (csr_addr == CSR.mtimecmp))
+        update_when(regs[CSR.mscratch], wdata,
+                    cond & (csr_addr == CSR.mscratch))
+        update_when(regs[CSR.mbadaddr], wdata,
+                    cond & (csr_addr == CSR.mbadaddr))
+        update_when(regs[CSR.mtohost], wdata,
+                    cond & (csr_addr == CSR.mtohost))
+        update_when(regs[CSR.mfromhost], wdata,
+                    cond & (csr_addr == CSR.mfromhost))
+
+        # eret
+        update_when(regs[CSR.mstatus],
+                    (CSR.PRV_U.zext(30) << 4) | (1 << 3) | (prv1 << 1) |
+                    ie1,
+                    ~exception & is_eret)
+
+        # TODO: exception logic comes after since it has priority
+        Cause = make_Cause(x_len)
+        mcause = m.mux([
+            m.mux([
                 m.mux([
                     m.mux([
                         m.mux([
-                            m.mux([
-                                Cause.IllegalInst,
-                                Cause.Breakpoint
-                            ], is_ebreak),
-                            Cause.Ecall + prv,
-                        ], is_ecall),
-                        Cause.StoreAddrMisaligned,
-                    ], saddr_invalid),
-                    Cause.LoadAddrMisaligned,
-                ], laddr_invalid),
-                Cause.InstAddrMisaligned,
-            ], iaddr_invalid)
-            with m.when(iaddr_invalid | laddr_invalid | saddr_invalid):
-                regs[CSR.mbadaddr].I @= csr.addr.value()
-        with m.elsewhen(is_eret):
-            regs[CSR.mstatus].I @= (CSR.PRV_U.zext(30) << 4) | (1 << 3) | (prv1 << 1) | ie1
-        with m.when(wen):
-            with m.when(csr_addr == CSR.mstatus):
-                regs[CSR.mstatus].I @= m.zext_to(wdata[0:6], 32)
-            with m.when(csr_addr == CSR.mip):
-                regs[CSR.mip].I @= (m.bits(wdata[7], 32) << 7) | (m.bits(wdata[3], 32) << 3)
-            with m.when(csr_addr == CSR.mie):
-                regs[CSR.mie].I @= (m.bits(wdata[7], 32) << 7) | (m.bits(wdata[3], 32) << 3)
-            with m.when(csr_addr == CSR.mepc):
-                regs[CSR.mepc].I @= (wdata >> 2) << 2
-            with m.when(csr_addr == CSR.mcause):
-                regs[CSR.mcause].I @= wdata & (1 << 31 | 0xf)
-            with m.when((csr_addr == CSR.timew) | (csr_addr == CSR.mtime)):
-                regs[CSR.time].I @= wdata
-            with m.when((csr_addr == CSR.timew) | (csr_addr == CSR.mtime)):
-                regs[CSR.timew].I @= wdata
-            with m.when((csr_addr == CSR.timew) | (csr_addr == CSR.mtime)):
-                regs[CSR.mtime].I @= wdata
-            with m.when((csr_addr == CSR.timehw) | (csr_addr == CSR.mtimeh)):
-                regs[CSR.timeh].I @= wdata
-            with m.when((csr_addr == CSR.timehw) | (csr_addr == CSR.mtimeh)):
-                regs[CSR.timehw].I @= wdata
-            with m.when((csr_addr == CSR.timehw) | (csr_addr == CSR.mtimeh)):
-                regs[CSR.mtimeh].I @= wdata
-            with m.when(csr_addr == CSR.cyclew):
-                regs[CSR.cycle].I @= wdata
-            with m.when(csr_addr == CSR.cyclew):
-                regs[CSR.cyclew].I @= wdata
-            with m.when(csr_addr == CSR.cyclehw):
-                regs[CSR.cycleh].I @= wdata
-            with m.when(csr_addr == CSR.cyclehw):
-                regs[CSR.cyclehw].I @= wdata
-            with m.when(csr_addr == CSR.instretw):
-                regs[CSR.instret].I @= wdata
-            with m.when(csr_addr == CSR.instretw):
-                regs[CSR.instretw].I @= wdata
-            with m.when(csr_addr == CSR.instrethw):
-                regs[CSR.instreth].I @= wdata
-            with m.when(csr_addr == CSR.instrethw):
-                regs[CSR.instrethw].I @= wdata
-            with m.when(csr_addr == CSR.mtimecmp):
-                regs[CSR.mtimecmp].I @= wdata
-            with m.when(csr_addr == CSR.mscratch):
-                regs[CSR.mscratch].I @= wdata
-            with m.when(csr_addr == CSR.mbadaddr):
-                regs[CSR.mbadaddr].I @= wdata
-            with m.when(csr_addr == CSR.mtohost):
-                regs[CSR.mtohost].I @= wdata
-            with m.when(csr_addr == CSR.mfromhost):
-                regs[CSR.mfromhost].I @= wdata
+                            Cause.IllegalInst,
+                            Cause.Breakpoint
+                        ], is_ebreak),
+                        Cause.Ecall + prv,
+                    ], is_ecall),
+                    Cause.StoreAddrMisaligned,
+                ], saddr_invalid),
+                Cause.LoadAddrMisaligned,
+            ], laddr_invalid),
+            Cause.InstAddrMisaligned,
+        ], iaddr_invalid)
+        update_when(regs[CSR.mcause], mcause, exception)
+
+        update_when(regs[CSR.mepc], (csr.pc.value() >> 2) << 2, exception)
+        update_when(regs[CSR.mstatus],
+                    (prv << 4) | (ie << 3) | (CSR.PRV_M.zext(30) << 1),
+                    exception)
+        update_when(regs[CSR.mbadaddr], csr.addr.value(), exception &
+                    (iaddr_invalid | laddr_invalid | saddr_invalid))
 
         epc = regs[CSR.mepc].O
         evec = regs[CSR.mtvec].O + (prv << 6)
@@ -348,8 +374,10 @@ def test_csr():
     if_.circuit.epc.expect(tester.peek(CSR_DUT.expected_epc))
     if_.circuit.evec.expect(tester.peek(CSR_DUT.expected_evec))
     if_.circuit.expt.expect(tester.peek(CSR_DUT.expected_expt))
-    tester.compile_and_run("verilator", magma_opts={"verilator_compat": True,
-                                                    "flatten_all_tuples": True,
-                                                    "terminate_unused": True},
-                           magma_output='mlir-verilog',
-                           flags=['-Wno-latch', '-Wno-unused', '-Wno-undriven'])
+    tester.compile_and_run("verilator",
+                           magma_opts={"disallow_local_variables": True,
+                                       "flatten_all_tuples": True,
+                                       "terminate_unused": True,
+                                       "emit_muxes_as_if_then_else": True},
+                           magma_output="mlir-verilog",
+                           flags=['-Wno-unused'])
