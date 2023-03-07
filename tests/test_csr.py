@@ -348,8 +348,9 @@ def test_csr():
     if_.circuit.epc.expect(tester.peek(CSR_DUT.expected_epc))
     if_.circuit.evec.expect(tester.peek(CSR_DUT.expected_evec))
     if_.circuit.expt.expect(tester.peek(CSR_DUT.expected_expt))
-    tester.compile_and_run("verilator", magma_opts={"verilator_compat": True,
-                                                    "flatten_all_tuples": True,
-                                                    "terminate_unused": True},
+    tester.compile_and_run("verilator",
+                           magma_opts={"disallow_local_variables": True,
+                                       "flatten_all_tuples": True,
+                                       "terminate_unused": True},
                            magma_output='mlir-verilog',
-                           flags=['-Wno-latch', '-Wno-unused', '-Wno-undriven'])
+                           flags=['-Wno-unused', '-Wno-undriven'])
