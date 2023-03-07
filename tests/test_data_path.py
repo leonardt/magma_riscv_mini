@@ -31,13 +31,17 @@ def test_datapath(test, ImmGen):
         counter.CE @= m.enable(state.O == INIT)
         cntr, done = counter.O, counter.COUT
         timeout = m.Register(m.Bits[x_len])()
-        mem = RegFileBuilder("mem", 1 << 20, x_len, write_forward=False,
-                             reset_type=m.Reset, backend="verilog")
+        n_write_ports = len(range(0, Const.PC_START, 4)) + 2
+        mem = m.MultiPortMemory(
+            1 << 20, m.UInt[x_len], num_read_ports=2,
+            num_write_ports=n_write_ports)()
         iaddr = (data_path.icache.req.data.addr // (x_len // 8))[:20]
         daddr = (data_path.dcache.req.data.addr // (x_len // 8))[:20]
         write = 0
-        mem_daddr = mem[daddr]
-        mem_iaddr = mem[iaddr]
+        mem.RADDR_0 @= daddr
+        mem.RADDR_1 @= iaddr
+        mem_daddr = mem.RDATA_0
+        mem_iaddr = mem.RDATA_1
         for i in range(x_len // 8):
             write |= m.mux([
                 mem_daddr & (0xff << (8 * i)),
@@ -52,16 +56,23 @@ def test_datapath(test, ImmGen):
             m.Register(m.UInt[x_len])()(mem_daddr)
         data_path.dcache.resp.valid @= state.O == RUN
 
+        i = 0
         for addr in range(0, Const.PC_START, 4):
             wdata = fin if addr == Const.PC_EVEC + (3 << 6) else nop
-            mem.write(addr // 4, wdata, m.enable(state.O == INIT))
-        mem.write(Const.PC_START // (x_len // 8) + m.zext_to(cntr, 20),
-                  m.mux(insts, cntr),
-                  m.enable(state.O == INIT))
+            getattr(mem, f"WADDR_{i}").wire(addr // 4)
+            getattr(mem, f"WDATA_{i}").wire(wdata)
+            getattr(mem, f"WE_{i}").wire(m.enable(state.O == INIT))
+            i += 1
+        getattr(mem, f"WADDR_{i}").wire(Const.PC_START // (x_len // 8) + m.zext_to(cntr, 20))
+        getattr(mem, f"WDATA_{i}").wire(m.mux(insts, cntr))
+        getattr(mem, f"WE_{i}").wire(m.enable(state.O == INIT))
 
-        mem.write(daddr, write,
-                  m.enable((state.O == RUN) & data_path.dcache.req.valid &
-                           data_path.dcache.req.data.mask.reduce_or()))
+        i += 1
+        getattr(mem, f"WADDR_{i}").wire(daddr)
+        getattr(mem, f"WDATA_{i}").wire(write)
+        getattr(mem, f"WE_{i}").wire(
+            m.enable((state.O == RUN) & data_path.dcache.req.valid &
+                     data_path.dcache.req.data.mask.reduce_or()))
 
         m.display("INST[%x] = %x, iaddr: %x", data_path.icache.req.data.addr,
                   mem_iaddr, iaddr).when(m.posedge(io.CLK))\
@@ -99,7 +110,10 @@ def test_datapath(test, ImmGen):
 
     tester = f.Tester(DUT, DUT.CLK)
     tester.wait_until_high(DUT.done)
-    tester.compile_and_run("verilator", magma_opts={"inline": True,
-                                                    "verilator_compat": True},
+    tester.compile_and_run("verilator",
+                           magma_opts={"flatten_all_tuples": True,
+                                       "disallow_local_variables": True,
+                                       "emit_muxes_as_if_then_else": True},
+                           magma_output="mlir-verilog",
                            flags=['-Wno-unused', '-Wno-undriven', '--assert'],
                            disp_type="realtime")
