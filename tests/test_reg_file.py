@@ -34,4 +34,5 @@ def test_reg_file_basic():
     t.circuit.rdata1.expect(0)
     t.circuit.rdata2.expect(0)
     t.compile_and_run(target="verilator", flags=["-Wno-unused",
-                                                 "-Wno-undriven"])
+                                                 "-Wno-undriven"],
+                      magma_output="mlir-verilog")
