@@ -80,10 +80,8 @@ def test_core(test, ImmGen):
 
             # reverse concat because we're using utils with chisel ordering
             _hex = [concat(*reversed(x)) for x in loadmem]
-            imem = RegFileBuilder("imem", 1 << 20, x_len, write_forward=False,
-                                  reset_type=m.Reset, backend="verilog")
-            dmem = RegFileBuilder("dmem", 1 << 20, x_len, write_forward=False,
-                                  reset_type=m.Reset, backend="verilog")
+            imem = m.Memory(1 << 20, m.UInt[x_len])()
+            dmem = m.Memory(1 << 20, m.UInt[x_len])()
 
             INIT, RUN = False, True
 
@@ -98,8 +96,10 @@ def test_core(test, ImmGen):
             iaddr = (core.icache.req.data.addr // (x_len // 8))[:20]
             daddr = (core.dcache.req.data.addr // (x_len // 8))[:20]
 
-            dmem_data = dmem[daddr]
-            imem_data = imem[iaddr]
+            dmem.RADDR @= daddr
+            dmem_data = dmem.RDATA
+            imem.RADDR @= iaddr
+            imem_data = imem.RDATA
             write = 0
             for i in range(x_len // 8):
                 write |= m.zext_to(m.mux(
@@ -117,14 +117,15 @@ def test_core(test, ImmGen):
 
             chunk = m.mux(_hex, cntr)
 
-            imem.write(m.zext_to(cntr, 20), chunk, m.enable(state.O == INIT))
+            imem.WADDR @= m.zext_to(cntr, 20)
+            imem.WDATA @= chunk
+            imem.WE @= m.enable(state.O == INIT)
 
-            dmem.write(
-                m.mux([m.zext_to(cntr, 20), daddr], state.O == INIT),
-                m.mux([chunk, write], state.O == INIT),
-                m.enable(
-                    (state.O == INIT) | (core.dcache.req.valid &
-                                         core.dcache.req.data.mask.reduce_or()))
+            dmem.WADDR @= m.mux([m.zext_to(cntr, 20), daddr], state.O == INIT)
+            dmem.WDATA @= m.mux([chunk, write], state.O == INIT)
+            dmem.WE @= m.enable(
+                (state.O == INIT) | (core.dcache.req.valid &
+                                     core.dcache.req.data.mask.reduce_or())
             )
 
             @m.inline_combinational()
@@ -165,6 +166,8 @@ def test_core(test, ImmGen):
 
     tester = f.Tester(DUT, DUT.CLK)
     tester.wait_until_high(DUT.done)
-    tester.compile_and_run("verilator", magma_opts={"inline": True,
-                                                    "verilator_compat": True},
+    tester.compile_and_run("verilator", magma_output="mlir-verilog",
+                           magma_opts={"flatten_all_tuples": True,
+                                       "disallow_local_variables": True,
+                                       "emit_muxes_as_if_then_else": True},
                            flags=['-Wno-unused', '-Wno-undriven', '--assert'])
