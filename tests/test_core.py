@@ -129,15 +129,12 @@ def test_core(test, ImmGen):
                                      core.dcache.req.data.mask.reduce_or())
             )
 
-            @m.inline_combinational()
-            def logic():
-                state.I @= state.O
-                cycle.I @= cycle.O
-                if state.O == RUN:
-                    cycle.I @= cycle.O + 1
-                else:
-                    if done:
-                        state.I @= RUN
+            state.I @= state.O
+            cycle.I @= cycle.O
+            with m.when(state.O == RUN):
+                cycle.I @= cycle.O + 1
+            with m.elsewhen(done):
+                state.I @= RUN
 
             debug = False
             if debug:

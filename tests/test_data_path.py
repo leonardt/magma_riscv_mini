@@ -89,18 +89,15 @@ def test_datapath(test, ImmGen):
             .if_((state.O == RUN) & data_path.dcache.req.valid &
                  ~data_path.dcache.req.data.mask.reduce_or())
 
-        @m.inline_combinational()
-        def logic():
-            state.I @= state.O
-            timeout.I @= timeout.O
-            io.done @= False
-            if state.O == RUN:
-                timeout.I @= timeout.O + 1
-                if data_path.host.tohost != 0:
-                    io.done @= True
-            else:
-                if done:
-                    state.I @= RUN
+        state.I @= state.O
+        timeout.I @= timeout.O
+        io.done @= False
+        with m.when(state.O == RUN):
+            timeout.I @= timeout.O + 1
+            with m.when(data_path.host.tohost != 0):
+                io.done @= True
+        with m.elsewhen(done):
+            state.I @= RUN
 
         f.assert_immediate(
             (state.O != RUN) | (data_path.host.tohost == 0) |
