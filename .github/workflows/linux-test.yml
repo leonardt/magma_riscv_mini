@@ -13,11 +13,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
-    - name: Setup Env
-      uses: conda-incubator/setup-miniconda@v2
-      with:
-        auto-update-conda: true
-        python-version: 3.7
+    - name: Set up Python 3.8
+      uses: actions/setup-python@v2
     - name: Install dependencies
       shell: bash
       run: |
