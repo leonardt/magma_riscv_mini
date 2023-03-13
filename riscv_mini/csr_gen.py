@@ -201,108 +201,227 @@ class CSRGen(m.Generator2):
         io.evec @= mtvec + (m.zext_to(PRV.O, x_len) << 6)
         io.epc @= mepc.O
 
-        # Counters
-        time.I @= time.O + 1
-        timeh.I @= timeh.O
-        with m.when(time.O.reduce_and()):
-            timeh.I @= timeh.O + 1
+        # # Counters
+        # time.I @= time.O + 1
+        # timeh.I @= timeh.O
+        # with m.when(time.O.reduce_and()):
+        #     timeh.I @= timeh.O + 1
 
-        cycle.I @= cycle.O + 1
-        cycleh.I @= cycleh.O
-        with m.when(cycle.O.reduce_and()):
-            cycleh.I @= cycleh.O + 1
-        instret.I @= instret.O
-        is_inst_ret = ((io.inst != Instructions.NOP) &
-                       (~expt | is_E_call | is_E_break) & ~io.stall)
-        with m.when(is_inst_ret):
-            instret.I @= instret.O + 1
-        instreth.I @= instreth.O
-        with m.when(is_inst_ret & instret.O.reduce_and()):
-            instreth.I @= instreth.O + 1
+        # cycle.I @= cycle.O + 1
+        # cycleh.I @= cycleh.O
+        # with m.when(cycle.O.reduce_and()):
+        #     cycleh.I @= cycleh.O + 1
+        # instret.I @= instret.O
+        # is_inst_ret = ((io.inst != Instructions.NOP) &
+        #                (~expt | is_E_call | is_E_break) & ~io.stall)
+        # with m.when(is_inst_ret):
+        #     instret.I @= instret.O + 1
+        # instreth.I @= instreth.O
+        # with m.when(is_inst_ret & instret.O.reduce_and()):
+        #     instreth.I @= instreth.O + 1
 
-        mbadaddr.I @= mbadaddr.O
-        mepc.I @= mepc.O
-        mcause.I @= mcause.O
-        PRV.I @= PRV.O
-        IE.I @= IE.O
-        IE1.I @= IE1.O
-        PRV1.I @= PRV1.O
-        MTIP.I @= MTIP.O
-        MSIP.I @= MSIP.O
-        MTIE.I @= MTIE.O
-        MSIE.I @= MSIE.O
-        mtimecmp.I @= mtimecmp.O
-        mscratch.I @= mscratch.O
-        mtohost.I @= mtohost.O
-        mfromhost.I @= mfromhost.O
-        with m.when(io.host.fromhost.valid):
-            mfromhost.I @= io.host.fromhost.data
+        # mbadaddr.I @= mbadaddr.O
+        # mepc.I @= mepc.O
+        # mcause.I @= mcause.O
+        # PRV.I @= PRV.O
+        # IE.I @= IE.O
+        # IE1.I @= IE1.O
+        # PRV1.I @= PRV1.O
+        # MTIP.I @= MTIP.O
+        # MSIP.I @= MSIP.O
+        # MTIE.I @= MTIE.O
+        # MSIE.I @= MSIE.O
+        # mtimecmp.I @= mtimecmp.O
+        # mscratch.I @= mscratch.O
+        # mtohost.I @= mtohost.O
+        # mfromhost.I @= mfromhost.O
+        # with m.when(io.host.fromhost.valid):
+        #     mfromhost.I @= io.host.fromhost.data
 
-        with m.when(~io.stall):
-            with m.when(expt):
-                mepc.I @= io.pc >> 2 << 2
-                with m.when(iaddr_invalid):
-                    mcause.I @= Cause.InstAddrMisaligned
-                with m.elsewhen(laddr_invalid):
-                    mcause.I @= Cause.LoadAddrMisaligned
-                with m.elsewhen(saddr_invalid):
-                    mcause.I @= Cause.StoreAddrMisaligned
-                with m.elsewhen(is_E_call):
-                    mcause.I @= Cause.Ecall + m.zext_to(PRV.O, x_len)
-                with m.elsewhen(is_E_break):
-                    mcause.I @= Cause.Breakpoint
-                with m.otherwise():
-                    mcause.I @= Cause.IllegalInst
-                PRV.I @= CSR.PRV_M
-                IE.I @= False
-                PRV1.I @= PRV.O
-                IE1.I @= IE.O
-                with m.when(iaddr_invalid | laddr_invalid | saddr_invalid):
-                    mbadaddr.I @= io.addr
-            with m.elsewhen(is_E_ret):
-                PRV.I @= PRV1.O
-                IE.I @= IE1.O
-                PRV1.I @= CSR.PRV_U
-                IE1.I @= True
-            with m.elsewhen(wen):
-                with m.when(csr_addr == CSR.mstatus):
-                    PRV1.I @= wdata[4:6]
-                    IE1.I @= wdata[3]
-                    PRV.I @= wdata[1:3]
-                    IE.I @= wdata[0]
-                with m.elsewhen(csr_addr == CSR.mip):
-                    MTIP.I @= wdata[7]
-                    MSIP.I @= wdata[3]
-                with m.elsewhen(csr_addr == CSR.mie):
-                    MTIE.I @= wdata[7]
-                    MSIE.I @= wdata[3]
-                with m.elsewhen(csr_addr == CSR.mtime):
-                    time.I @= wdata
-                with m.elsewhen(csr_addr == CSR.mtimeh):
-                    timeh.I @= wdata
-                with m.elsewhen(csr_addr == CSR.mtimecmp):
-                    mtimecmp.I @= wdata
-                with m.elsewhen(csr_addr == CSR.mscratch):
-                    mscratch.I @= wdata
-                with m.elsewhen(csr_addr == CSR.mepc):
-                    mepc.I @= wdata >> 2 << 2
-                with m.elsewhen(csr_addr == CSR.mcause):
-                    mcause.I @= wdata & (1 << (x_len - 1) | 0xf)
-                with m.elsewhen(csr_addr == CSR.mbadaddr):
-                    mbadaddr.I @= wdata
-                with m.elsewhen(csr_addr == CSR.mtohost):
-                    mtohost.I @= wdata
-                with m.elsewhen(csr_addr == CSR.mfromhost):
-                    mfromhost.I @= wdata
-                with m.elsewhen(csr_addr == CSR.cyclew):
-                    cycle.I @= wdata
-                with m.elsewhen(csr_addr == CSR.timew):
-                    time.I @= wdata
-                with m.elsewhen(csr_addr == CSR.instretw):
-                    instret.I @= wdata
-                with m.elsewhen(csr_addr == CSR.cyclehw):
-                    cycleh.I @= wdata
-                with m.elsewhen(csr_addr == CSR.timehw):
-                    timeh.I @= wdata
-                with m.elsewhen(csr_addr == CSR.instrethw):
-                    instreth.I @= wdata
+        # with m.when(~io.stall):
+        #     with m.when(expt):
+        #         mepc.I @= io.pc >> 2 << 2
+        #         with m.when(iaddr_invalid):
+        #             mcause.I @= Cause.InstAddrMisaligned
+        #         with m.elsewhen(laddr_invalid):
+        #             mcause.I @= Cause.LoadAddrMisaligned
+        #         with m.elsewhen(saddr_invalid):
+        #             mcause.I @= Cause.StoreAddrMisaligned
+        #         with m.elsewhen(is_E_call):
+        #             mcause.I @= Cause.Ecall + m.zext_to(PRV.O, x_len)
+        #         with m.elsewhen(is_E_break):
+        #             mcause.I @= Cause.Breakpoint
+        #         with m.otherwise():
+        #             mcause.I @= Cause.IllegalInst
+        #         PRV.I @= CSR.PRV_M
+        #         IE.I @= False
+        #         PRV1.I @= PRV.O
+        #         IE1.I @= IE.O
+        #         with m.when(iaddr_invalid | laddr_invalid | saddr_invalid):
+        #             mbadaddr.I @= io.addr
+        #     with m.elsewhen(is_E_ret):
+        #         PRV.I @= PRV1.O
+        #         IE.I @= IE1.O
+        #         PRV1.I @= CSR.PRV_U
+        #         IE1.I @= True
+        #     with m.elsewhen(wen):
+        #         with m.when(csr_addr == CSR.mstatus):
+        #             PRV1.I @= wdata[4:6]
+        #             IE1.I @= wdata[3]
+        #             PRV.I @= wdata[1:3]
+        #             IE.I @= wdata[0]
+        #         with m.elsewhen(csr_addr == CSR.mip):
+        #             MTIP.I @= wdata[7]
+        #             MSIP.I @= wdata[3]
+        #         with m.elsewhen(csr_addr == CSR.mie):
+        #             MTIE.I @= wdata[7]
+        #             MSIE.I @= wdata[3]
+        #         with m.elsewhen(csr_addr == CSR.mtime):
+        #             time.I @= wdata
+        #         with m.elsewhen(csr_addr == CSR.mtimeh):
+        #             timeh.I @= wdata
+        #         with m.elsewhen(csr_addr == CSR.mtimecmp):
+        #             mtimecmp.I @= wdata
+        #         with m.elsewhen(csr_addr == CSR.mscratch):
+        #             mscratch.I @= wdata
+        #         with m.elsewhen(csr_addr == CSR.mepc):
+        #             mepc.I @= wdata >> 2 << 2
+        #         with m.elsewhen(csr_addr == CSR.mcause):
+        #             mcause.I @= wdata & (1 << (x_len - 1) | 0xf)
+        #         with m.elsewhen(csr_addr == CSR.mbadaddr):
+        #             mbadaddr.I @= wdata
+        #         with m.elsewhen(csr_addr == CSR.mtohost):
+        #             mtohost.I @= wdata
+        #         with m.elsewhen(csr_addr == CSR.mfromhost):
+        #             mfromhost.I @= wdata
+        #         with m.elsewhen(csr_addr == CSR.cyclew):
+        #             cycle.I @= wdata
+        #         with m.elsewhen(csr_addr == CSR.timew):
+        #             time.I @= wdata
+        #         with m.elsewhen(csr_addr == CSR.instretw):
+        #             instret.I @= wdata
+        #         with m.elsewhen(csr_addr == CSR.cyclehw):
+        #             cycleh.I @= wdata
+        #         with m.elsewhen(csr_addr == CSR.timehw):
+        #             timeh.I @= wdata
+        #         with m.elsewhen(csr_addr == CSR.instrethw):
+        #             instreth.I @= wdata
+
+        is_inst_ret = m.Bit(name="is_inst_ret")
+        is_inst_ret @= ((io.inst != Instructions.NOP) &
+                        (~expt | is_E_call | is_E_break) & ~io.stall)
+
+        is_inst_reth = m.Bit(name="is_inst_reth")
+        is_inst_reth @= is_inst_ret & instret.O.reduce_and()
+
+        not_stall = m.Bit(name="not_stall")
+        not_stall @= ~io.stall
+
+        is_mbadaddr = m.Bit(name="is_mbadaddr")
+        is_mbadaddr @= iaddr_invalid | laddr_invalid | saddr_invalid
+
+        @m.inline_combinational()
+        def logic():
+            # Counters
+            time.I @= time.O + 1
+            timeh.I @= timeh.O
+            if time.O.reduce_and():
+                timeh.I @= timeh.O + 1
+
+            cycle.I @= cycle.O + 1
+            cycleh.I @= cycleh.O
+            if cycle.O.reduce_and():
+                cycleh.I @= cycleh.O + 1
+            instret.I @= instret.O
+            if is_inst_ret:
+                instret.I @= instret.O + 1
+            instreth.I @= instreth.O
+            if is_inst_reth:
+                instreth.I @= instreth.O + 1
+
+            mbadaddr.I @= mbadaddr.O
+            mepc.I @= mepc.O
+            mcause.I @= mcause.O
+            PRV.I @= PRV.O
+            IE.I @= IE.O
+            IE1.I @= IE1.O
+            PRV1.I @= PRV1.O
+            MTIP.I @= MTIP.O
+            MSIP.I @= MSIP.O
+            MTIE.I @= MTIE.O
+            MSIE.I @= MSIE.O
+            mtimecmp.I @= mtimecmp.O
+            mscratch.I @= mscratch.O
+            mtohost.I @= mtohost.O
+            mfromhost.I @= mfromhost.O
+            if io.host.fromhost.valid:
+                mfromhost.I @= io.host.fromhost.data
+
+            if not_stall:
+                if expt:
+                    mepc.I @= io.pc >> 2 << 2
+                    if iaddr_invalid:
+                        mcause.I @= Cause.InstAddrMisaligned
+                    elif laddr_invalid:
+                        mcause.I @= Cause.LoadAddrMisaligned
+                    elif saddr_invalid:
+                        mcause.I @= Cause.StoreAddrMisaligned
+                    elif is_E_call:
+                        mcause.I @= Cause.Ecall + m.zext_to(PRV.O, x_len)
+                    elif is_E_break:
+                        mcause.I @= Cause.Breakpoint
+                    else:
+                        mcause.I @= Cause.IllegalInst
+                    PRV.I @= CSR.PRV_M
+                    IE.I @= False
+                    PRV1.I @= PRV.O
+                    IE1.I @= IE.O
+                    if is_mbadaddr:
+                        mbadaddr.I @= io.addr
+                elif is_E_ret:
+                    PRV.I @= PRV1.O
+                    IE.I @= IE1.O
+                    PRV1.I @= CSR.PRV_U
+                    IE1.I @= True
+                elif wen:
+                    if csr_addr == CSR.mstatus:
+                        PRV1.I @= wdata[4:6]
+                        IE1.I @= wdata[3]
+                        PRV.I @= wdata[1:3]
+                        IE.I @= wdata[0]
+                    elif csr_addr == CSR.mip:
+                        MTIP.I @= wdata[7]
+                        MSIP.I @= wdata[3]
+                    elif csr_addr == CSR.mie:
+                        MTIE.I @= wdata[7]
+                        MSIE.I @= wdata[3]
+                    elif csr_addr == CSR.mtime:
+                        time.I @= wdata
+                    elif csr_addr == CSR.mtimeh:
+                        timeh.I @= wdata
+                    elif csr_addr == CSR.mtimecmp:
+                        mtimecmp.I @= wdata
+                    elif csr_addr == CSR.mscratch:
+                        mscratch.I @= wdata
+                    elif csr_addr == CSR.mepc:
+                        mepc.I @= wdata >> 2 << 2
+                    elif csr_addr == CSR.mcause:
+                        mcause.I @= wdata & (1 << (x_len - 1) | 0xf)
+                    elif csr_addr == CSR.mbadaddr:
+                        mbadaddr.I @= wdata
+                    elif csr_addr == CSR.mtohost:
+                        mtohost.I @= wdata
+                    elif csr_addr == CSR.mfromhost:
+                        mfromhost.I @= wdata
+                    elif csr_addr == CSR.cyclew:
+                        cycle.I @= wdata
+                    elif csr_addr == CSR.timew:
+                        time.I @= wdata
+                    elif csr_addr == CSR.instretw:
+                        instret.I @= wdata
+                    elif csr_addr == CSR.cyclehw:
+                        cycleh.I @= wdata
+                    elif csr_addr == CSR.timehw:
+                        timeh.I @= wdata
+                    elif csr_addr == CSR.instrethw:
+                        instreth.I @= wdata
