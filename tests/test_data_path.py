@@ -64,7 +64,9 @@ def test_datapath(test, ImmGen):
             getattr(mem, f"WDATA_{i}").wire(wdata)
             getattr(mem, f"WE_{i}").wire(m.enable(state.O == INIT))
             i += 1
-        getattr(mem, f"WADDR_{i}").wire(Const.PC_START // (x_len // 8) + m.zext_to(cntr, 20))
+        getattr(mem, f"WADDR_{i}").wire(
+            Const.PC_START // (x_len // 8) + m.zext_to(cntr, 20)
+        )
         getattr(mem, f"WDATA_{i}").wire(m.mux(insts, cntr))
         getattr(mem, f"WE_{i}").wire(m.enable(state.O == INIT))
 
