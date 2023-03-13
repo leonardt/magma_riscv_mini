@@ -18,6 +18,12 @@ jobs:
     - name: Install dependencies
       shell: bash
       run: |
+          mkdir -p circt/build
+          cd circt/build
+          wget https://github.com/llvm/circt/releases/download/sifive%2F1%2F21%2F0/circt-bin-ubuntu-20.04.tar.gz
+          tar -xvf circt-bin-ubuntu-20.04.tar.gz
+          cd ../..
+          export CIRCT_HOME=$PWD/circt
           sudo apt install -y verilator libgmp-dev libmpfr-dev libmpc-dev
     - name: Install Python packages
       shell: bash -l {0}
