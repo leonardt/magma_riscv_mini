@@ -1,3 +1,5 @@
+import tempfile
+
 import fault as f
 import magma as m
 from mantle2.counter import Counter
@@ -59,8 +61,12 @@ def test_imm_gen_wire(ImmGen):
 
     tester = f.Tester(DUT, DUT.CLK)
     tester.wait_until_high(DUT.done)
-    tester.compile_and_run("verilator", magma_opts={"verilator_compat": True,
-                                                    "inline": True,
-                                                    "terminate_unused": True},
-                           flags=['--assert'],
-                           disp_type="realtime")
+    with tempfile.TemporaryDirectory() as tempdir:
+        tester.compile_and_run("verilator",
+                               magma_opts={"flatten_all_tuples": True,
+                                           "disallow_local_variables": True,
+                                           "terminate_unused": True},
+                               magma_output="mlir-verilog",
+                               flags=['--assert', "-Wno-unused"],
+                               disp_type="realtime",
+                               directory=tempdir)
