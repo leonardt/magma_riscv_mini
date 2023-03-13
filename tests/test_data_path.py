@@ -1,7 +1,8 @@
+import tempfile
+
 import pytest
 import fault as f
 import magma as m
-from mantle import RegFileBuilder
 from mantle2.counter import Counter
 
 from riscv_mini.data_path import Datapath, Const
@@ -18,8 +19,8 @@ def test_datapath(test, ImmGen):
         io = m.IO(done=m.Out(m.Bit)) + m.ClockIO(has_reset=True)
         data_path = Datapath(x_len, ImmGen=ImmGen)()
         control = Control(x_len)()
-        for name, value in data_path.ctrl.items():
-            m.wire(value, getattr(control, name))
+        for key, value in data_path.ctrl.items():
+            m.wire(value, getattr(control, key))
         data_path.host.fromhost.data.undriven()
         data_path.host.fromhost.valid @= 0
 
@@ -93,13 +94,13 @@ def test_datapath(test, ImmGen):
             state.I @= state.O
             timeout.I @= timeout.O
             io.done @= False
-            if state.O == INIT:
-                if done:
-                    state.I @= RUN
-            elif state.O == RUN:
+            if state.O == RUN:
                 timeout.I @= timeout.O + 1
                 if data_path.host.tohost != 0:
                     io.done @= True
+            else:
+                if done:
+                    state.I @= RUN
 
         f.assert_immediate(
             (state.O != RUN) | (data_path.host.tohost == 0) |
@@ -110,10 +111,12 @@ def test_datapath(test, ImmGen):
 
     tester = f.Tester(DUT, DUT.CLK)
     tester.wait_until_high(DUT.done)
-    tester.compile_and_run("verilator",
-                           magma_opts={"flatten_all_tuples": True,
-                                       "disallow_local_variables": True,
-                                       "emit_muxes_as_if_then_else": True},
-                           magma_output="mlir-verilog",
-                           flags=['-Wno-unused', '-Wno-undriven', '--assert'],
-                           disp_type="realtime")
+    with tempfile.TemporaryDirectory() as tempdir:
+        tester.compile_and_run("verilator",
+                               magma_opts={"flatten_all_tuples": True,
+                                           "disallow_local_variables": True},
+                               magma_output="mlir-verilog",
+                               flags=['-Wno-unused', '-Wno-undriven', '--assert'],
+                               disp_type="realtime",
+                               directory=tempdir
+                               )

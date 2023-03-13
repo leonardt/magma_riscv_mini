@@ -69,6 +69,8 @@ class Datapath(m.Generator2):
         stall = ~self.io.icache.resp.valid | ~self.io.dcache.resp.valid
         pc = m.Register(init=UIntVector[x_len](Const.PC_START) -
                         UIntVector[x_len](4))()
+        take_sum = m.Bit(name="take_sum")
+        take_sum @= (self.io.ctrl.pc_sel == PC_ALU) | br_cond.taken
         npc = m.mux([
             m.mux([
                 m.mux([
@@ -78,7 +80,7 @@ class Datapath(m.Generator2):
                             pc.O
                         ], self.io.ctrl.pc_sel == PC_0),
                         alu.sum_ >> 1 << 1
-                    ], (self.io.ctrl.pc_sel == PC_ALU) | br_cond.taken),
+                    ], take_sum),
                     csr.epc
                 ], self.io.ctrl.pc_sel == PC_EPC),
                 csr.evec
@@ -86,10 +88,12 @@ class Datapath(m.Generator2):
             pc.O
         ], stall)
 
+        is_nop = m.Bit(name="is_nop")
+        is_nop @= started | self.io.ctrl.inst_kill | br_cond.taken | csr.expt
         inst = m.mux([
             self.io.icache.resp.data.data,
             Instructions.NOP
-        ], started | self.io.ctrl.inst_kill | br_cond.taken | csr.expt)
+        ], is_nop)
 
         pc.I @= npc
         self.io.icache.req.data.addr @= npc
@@ -119,12 +123,18 @@ class Datapath(m.Generator2):
 
         # bypass
         wb_rd_addr = ew_inst.O[7:12]
-        rs1_hazard = wb_en.O & rs1_addr.reduce_or() & (rs1_addr == wb_rd_addr)
-        rs2_hazard = wb_en.O & rs2_addr.reduce_or() & (rs2_addr == wb_rd_addr)
-        rs1 = m.mux([reg_file.rdata1, ew_alu.O],
-                    (wb_sel.O == WB_ALU) & rs1_hazard)
-        rs2 = m.mux([reg_file.rdata2, ew_alu.O],
-                    (wb_sel.O == WB_ALU) & rs2_hazard)
+        rs1_hazard = m.Bit(name="rs1_hazard")
+        rs1_hazard @= (
+            wb_en.O & rs1_addr.reduce_or() & (rs1_addr == wb_rd_addr) &
+            (wb_sel.O == WB_ALU)
+        )
+        rs2_hazard = m.Bit(name="rs2_hazard")
+        rs2_hazard @= (
+            wb_en.O & rs2_addr.reduce_or() & (rs2_addr == wb_rd_addr) &
+            (wb_sel.O == WB_ALU)
+        )
+        rs1 = m.mux([reg_file.rdata1, ew_alu.O], rs1_hazard)
+        rs2 = m.mux([reg_file.rdata2, ew_alu.O], rs2_hazard)
 
         # ALU operations
         alu.A @= m.mux([fe_pc.O, rs1], self.io.ctrl.A_sel == A_RS1)

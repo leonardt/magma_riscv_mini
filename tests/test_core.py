@@ -2,7 +2,6 @@ import pytest
 from hwtypes import BitVector
 import magma as m
 import fault as f
-from mantle import RegFileBuilder
 from mantle2.counter import Counter
 
 from riscv_mini.core import Core
@@ -102,9 +101,11 @@ def test_core(test, ImmGen):
             imem_data = imem.RDATA
             write = 0
             for i in range(x_len // 8):
+                sel = m.Bit(name=f"sel_{i}")
+                sel @= core.dcache.req.valid & core.dcache.req.data.mask[i]
                 write |= m.zext_to(m.mux(
                     [dmem_data, core.dcache.req.data.data],
-                    core.dcache.req.valid & core.dcache.req.data.mask[i]
+                    sel
                 )[8 * i:8 * (i + 1)], 32) << (8 * i)
 
             core.RESET @= m.reset(state.O == INIT)
@@ -121,8 +122,8 @@ def test_core(test, ImmGen):
             imem.WDATA @= chunk
             imem.WE @= m.enable(state.O == INIT)
 
-            dmem.WADDR @= m.mux([m.zext_to(cntr, 20), daddr], state.O == INIT)
-            dmem.WDATA @= m.mux([chunk, write], state.O == INIT)
+            dmem.WADDR @= m.mux([daddr, m.zext_to(cntr, 20)], state.O == RUN)
+            dmem.WDATA @= m.mux([write, chunk], state.O == RUN)
             dmem.WE @= m.enable(
                 (state.O == INIT) | (core.dcache.req.valid &
                                      core.dcache.req.data.mask.reduce_or())
@@ -132,11 +133,11 @@ def test_core(test, ImmGen):
             def logic():
                 state.I @= state.O
                 cycle.I @= cycle.O
-                if state.O == INIT:
-                    if done:
-                        state.I @= RUN
                 if state.O == RUN:
                     cycle.I @= cycle.O + 1
+                else:
+                    if done:
+                        state.I @= RUN
 
             debug = False
             if debug:
@@ -168,6 +169,5 @@ def test_core(test, ImmGen):
     tester.wait_until_high(DUT.done)
     tester.compile_and_run("verilator", magma_output="mlir-verilog",
                            magma_opts={"flatten_all_tuples": True,
-                                       "disallow_local_variables": True,
-                                       "emit_muxes_as_if_then_else": True},
+                                       "disallow_local_variables": True},
                            flags=['-Wno-unused', '-Wno-undriven', '--assert'])
