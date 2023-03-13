@@ -4,7 +4,7 @@ with open("README.md", "r") as fh:
     LONG_DESCRIPTION = fh.read()
 
 DESCRIPTION = """\
-Magma port of https://github.com/ucb-bar/riscv-mini
+magma port of https://github.com/ucb-bar/riscv-mini
 """
 
 setup(
