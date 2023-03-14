@@ -76,6 +76,7 @@ def test_br_cond(BrCond):
     tester.assert_(tester.circuit.taken == tester.circuit.out)
     tester.compile_and_run("verilator",
                            magma_opts={"terminate_unused": True,
-                                       "flatten_all_tuples": True},
+                                       "flatten_all_tuples": True,
+                                       "disallow_local_variables": True},
                            magma_output="mlir-verilog",
-                           flags=["-Wno-UNUSED", "-Wno-latch"])
+                           flags=["-Wno-UNUSED"])
