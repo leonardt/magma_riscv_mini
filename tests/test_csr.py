@@ -23,10 +23,7 @@ def update_when(reg, value, cond):
         reg.I.unwire(default)
     else:
         default = reg.O
-    # Temp hack for verilator width inference issue
-    _cond = m.Bit(name=f"cond_{id(cond)}")
-    _cond @= cond
-    reg.I @= m.mux([default, value], _cond)
+    reg.I @= m.mux([default, value], cond)
 
 
 def incr_when(reg, cond):
@@ -72,9 +69,6 @@ def test_csr():
             SYS(Funct3.CSRRC, 0, CSR.mfromhost, 0)
         ]
     )
-    print(insts)
-    # print(hex(int(rand_inst)))
-    # exit()
 
     n = len(insts)
     pc = [BV.random(x_len) for _ in range(n)]
@@ -386,5 +380,4 @@ def test_csr():
                                            "terminate_unused": True},
                                magma_output="mlir-verilog",
                                flags=['-Wno-unused'],
-                               directory=tempdir
-                               )
+                               directory=tempdir)
