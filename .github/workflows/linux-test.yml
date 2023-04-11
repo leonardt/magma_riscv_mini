@@ -22,8 +22,8 @@ jobs:
       run: |
           mkdir -p circt/build
           cd circt/build
-          wget https://github.com/llvm/circt/releases/download/firtool-1.37.0/firrtl-bin-ubuntu-20.04.tar.gz
-          tar -xvf firrtl-bin-ubuntu-20.04.tar.gz
+          wget https://github.com/llvm/circt/releases/download/firtool-1.36.0/circt-bin-ubuntu-20.04.tar.gz
+          tar -xvf circt-bin-ubuntu-20.04.tar.gz
           export PATH=$PWD/firtool-1.36.0/bin:$PATH
           which circt-opt
           cd ../..
