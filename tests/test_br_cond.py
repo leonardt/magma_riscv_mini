@@ -77,6 +77,7 @@ def test_br_cond(BrCond):
     tester.compile_and_run("verilator",
                            magma_opts={"terminate_unused": True,
                                        "flatten_all_tuples": True,
-                                       "disallow_local_variables": True},
+                                       "disallow_local_variables": True,
+                                       "check_circt_opt_version": False},
                            magma_output="mlir-verilog",
                            flags=["-Wno-UNUSED"])

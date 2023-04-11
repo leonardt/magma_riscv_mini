@@ -114,7 +114,8 @@ def test_datapath(test, ImmGen):
         tester.compile_and_run(
             "verilator",
             magma_opts={"flatten_all_tuples": True,
-                        "disallow_local_variables": True},
+                        "disallow_local_variables": True,
+                        "check_circt_opt_version": False},
             magma_output="mlir-verilog",
             flags=['-Wno-unused', '-Wno-undriven', '--assert'],
             disp_type="realtime",

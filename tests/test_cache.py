@@ -554,7 +554,8 @@ def test_cache():
     tester.compile_and_run("verilator",
                            magma_opts={
                                "flatten_all_tuples": True,
-                               "disallow_local_variables": True
+                               "disallow_local_variables": True,
+                               "check_circt_opt_version": False
                            },
                            flags=['-Wno-unused', '--assert', '-Wno-width'],
                            disp_type="realtime",

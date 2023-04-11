@@ -383,7 +383,8 @@ def test_csr():
         tester.compile_and_run("verilator",
                                magma_opts={"disallow_local_variables": True,
                                            "flatten_all_tuples": True,
-                                           "terminate_unused": True},
+                                           "terminate_unused": True,
+                                           "check_circt_opt_version": False},
                                magma_output="mlir-verilog",
                                flags=['-Wno-unused'],
                                directory=tempdir
