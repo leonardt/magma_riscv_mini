@@ -33,7 +33,7 @@ def test_datapath(test, ImmGen):
         cntr, done = counter.O, counter.COUT
         timeout = m.Register(m.Bits[x_len])()
         n_write_ports = len(range(0, Const.PC_START, 4)) + 2
-        mem = m.MultiPortMemory(
+        mem = m.MultiportMemory(
             1 << 20, m.UInt[x_len], num_read_ports=2,
             num_write_ports=n_write_ports)()
         iaddr = (data_path.icache.req.data.addr // (x_len // 8))[:20]

@@ -18,7 +18,7 @@ class RegFile(m.Generator2):
             waddr=m.In(m.UInt[5]),
             wdata=m.In(m.UInt[x_len])
         ) + m.ClockIO(has_reset=True)
-        regs = m.MultiPortMemory(32, m.UInt[x_len], num_read_ports=2)()
+        regs = m.MultiportMemory(32, m.UInt[x_len], num_read_ports=2)()
         regs.RADDR_0 @= io.raddr1
         regs.RADDR_1 @= io.raddr2
         io.rdata1 @= m.mux([0, regs.RDATA_0], io.raddr1.reduce_or())
