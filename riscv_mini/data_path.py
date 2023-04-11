@@ -69,6 +69,8 @@ class Datapath(m.Generator2):
         stall = ~self.io.icache.resp.valid | ~self.io.dcache.resp.valid
         pc = m.Register(init=UIntVector[x_len](Const.PC_START) -
                         UIntVector[x_len](4))()
+        take_sum = m.Bit(name="take_sum")
+        take_sum @= (self.io.ctrl.pc_sel == PC_ALU) | br_cond.taken
         npc = m.mux([
             m.mux([
                 m.mux([
@@ -78,7 +80,7 @@ class Datapath(m.Generator2):
                             pc.O
                         ], self.io.ctrl.pc_sel == PC_0),
                         alu.sum_ >> 1 << 1
-                    ], (self.io.ctrl.pc_sel == PC_ALU) | br_cond.taken),
+                    ], take_sum),
                     csr.epc
                 ], self.io.ctrl.pc_sel == PC_EPC),
                 csr.evec
@@ -86,10 +88,12 @@ class Datapath(m.Generator2):
             pc.O
         ], stall)
 
+        is_nop = m.Bit(name="is_nop")
+        is_nop @= started | self.io.ctrl.inst_kill | br_cond.taken | csr.expt
         inst = m.mux([
             self.io.icache.resp.data.data,
             Instructions.NOP
-        ], started | self.io.ctrl.inst_kill | br_cond.taken | csr.expt)
+        ], is_nop)
 
         pc.I @= npc
         self.io.icache.req.data.addr @= npc
@@ -119,12 +123,18 @@ class Datapath(m.Generator2):
 
         # bypass
         wb_rd_addr = ew_inst.O[7:12]
-        rs1_hazard = wb_en.O & rs1_addr.reduce_or() & (rs1_addr == wb_rd_addr)
-        rs2_hazard = wb_en.O & rs2_addr.reduce_or() & (rs2_addr == wb_rd_addr)
-        rs1 = m.mux([reg_file.rdata1, ew_alu.O],
-                    (wb_sel.O == WB_ALU) & rs1_hazard)
-        rs2 = m.mux([reg_file.rdata2, ew_alu.O],
-                    (wb_sel.O == WB_ALU) & rs2_hazard)
+        rs1_hazard = m.Bit(name="rs1_hazard")
+        rs1_hazard @= (
+            wb_en.O & rs1_addr.reduce_or() & (rs1_addr == wb_rd_addr) &
+            (wb_sel.O == WB_ALU)
+        )
+        rs2_hazard = m.Bit(name="rs2_hazard")
+        rs2_hazard @= (
+            wb_en.O & rs2_addr.reduce_or() & (rs2_addr == wb_rd_addr) &
+            (wb_sel.O == WB_ALU)
+        )
+        rs1 = m.mux([reg_file.rdata1, ew_alu.O], rs1_hazard)
+        rs2 = m.mux([reg_file.rdata2, ew_alu.O], rs2_hazard)
 
         # ALU operations
         alu.A @= m.mux([fe_pc.O, rs1], self.io.ctrl.A_sel == A_RS1)
@@ -151,39 +161,37 @@ class Datapath(m.Generator2):
         }, m.mux([self.io.ctrl.st_type, st_type.O], stall), m.bits(0, 4))
 
         # Pipelining
-        @m.inline_combinational()
-        def pipeline_logic():
-            ew_pc.I @= ew_pc.O
-            ew_inst.I @= ew_inst.O
-            ew_alu.I @= ew_alu.O
-            csr_in.I @= csr_in.O
-            st_type.I @= st_type.O
-            ld_type.I @= ld_type.O
-            wb_sel.I @= wb_sel.O
-            wb_en.I @= wb_en.O
-            csr_cmd.I @= csr_cmd.O
-            illegal.I @= illegal.O
-            pc_check.I @= pc_check.O
-            if m.bit(self.io.RESET) | ~stall & csr.expt:
-                st_type.I @= 0
-                ld_type.I @= 0
-                wb_en.I @= 0
-                csr_cmd.I @= 0
-                illegal.I @= False
-                pc_check.I @= False
-            elif ~stall & ~csr.expt:
-                ew_pc.I @= fe_pc.O
-                ew_inst.I @= fe_inst.O
-                ew_alu.I @= alu.O
-                csr_in.I @= m.mux([rs1, imm_gen.O],
-                                  self.io.ctrl.imm_sel == IMM_Z)
-                st_type.I @= self.io.ctrl.st_type
-                ld_type.I @= self.io.ctrl.ld_type
-                wb_sel.I @= self.io.ctrl.wb_sel
-                wb_en.I @= self.io.ctrl.wb_en
-                csr_cmd.I @= self.io.ctrl.csr_cmd
-                illegal.I @= self.io.ctrl.illegal
-                pc_check.I @= self.io.ctrl.pc_sel == PC_ALU
+        ew_pc.I @= ew_pc.O
+        ew_inst.I @= ew_inst.O
+        ew_alu.I @= ew_alu.O
+        csr_in.I @= csr_in.O
+        st_type.I @= st_type.O
+        ld_type.I @= ld_type.O
+        wb_sel.I @= wb_sel.O
+        wb_en.I @= wb_en.O
+        csr_cmd.I @= csr_cmd.O
+        illegal.I @= illegal.O
+        pc_check.I @= pc_check.O
+        with m.when(m.bit(self.io.RESET) | ~stall & csr.expt):
+            st_type.I @= 0
+            ld_type.I @= 0
+            wb_en.I @= 0
+            csr_cmd.I @= 0
+            illegal.I @= False
+            pc_check.I @= False
+        with m.elsewhen(~stall & ~csr.expt):
+            ew_pc.I @= fe_pc.O
+            ew_inst.I @= fe_inst.O
+            ew_alu.I @= alu.O
+            csr_in.I @= m.mux([rs1, imm_gen.O],
+                              self.io.ctrl.imm_sel == IMM_Z)
+            st_type.I @= self.io.ctrl.st_type
+            ld_type.I @= self.io.ctrl.ld_type
+            wb_sel.I @= self.io.ctrl.wb_sel
+            wb_en.I @= self.io.ctrl.wb_en
+            csr_cmd.I @= self.io.ctrl.csr_cmd
+            illegal.I @= self.io.ctrl.illegal
+            pc_check.I @= self.io.ctrl.pc_sel == PC_ALU
 
         # Load
         l_offset = ((m.uint(ew_alu.O[1], x_len) << 4) |

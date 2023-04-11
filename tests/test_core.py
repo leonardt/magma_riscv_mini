@@ -2,7 +2,7 @@ import pytest
 from hwtypes import BitVector
 import magma as m
 import fault as f
-from mantle import CounterModM, RegFileBuilder
+from mantle2.counter import Counter
 
 from riscv_mini.core import Core
 from riscv_mini.imm_gen import ImmGenWire, ImmGenMux
@@ -79,10 +79,8 @@ def test_core(test, ImmGen):
 
             # reverse concat because we're using utils with chisel ordering
             _hex = [concat(*reversed(x)) for x in loadmem]
-            imem = RegFileBuilder("imem", 1 << 20, x_len, write_forward=False,
-                                  reset_type=m.Reset, backend="verilog")
-            dmem = RegFileBuilder("dmem", 1 << 20, x_len, write_forward=False,
-                                  reset_type=m.Reset, backend="verilog")
+            imem = m.Memory(1 << 20, m.UInt[x_len])()
+            dmem = m.Memory(1 << 20, m.UInt[x_len])()
 
             INIT, RUN = False, True
 
@@ -90,20 +88,24 @@ def test_core(test, ImmGen):
             cycle = m.Register(m.UInt[32])()
 
             n = len(_hex)
-            counter = CounterModM(n, n.bit_length(), has_ce=True)
+            counter = Counter(n, has_enable=True, has_cout=True)()
             counter.CE @= m.enable(state.O == INIT)
             cntr, done = counter.O, counter.COUT
 
             iaddr = (core.icache.req.data.addr // (x_len // 8))[:20]
             daddr = (core.dcache.req.data.addr // (x_len // 8))[:20]
 
-            dmem_data = dmem[daddr]
-            imem_data = imem[iaddr]
+            dmem.RADDR @= daddr
+            dmem_data = dmem.RDATA
+            imem.RADDR @= iaddr
+            imem_data = imem.RDATA
             write = 0
             for i in range(x_len // 8):
+                sel = m.Bit(name=f"sel_{i}")
+                sel @= core.dcache.req.valid & core.dcache.req.data.mask[i]
                 write |= m.zext_to(m.mux(
                     [dmem_data, core.dcache.req.data.data],
-                    core.dcache.req.valid & core.dcache.req.data.mask[i]
+                    sel
                 )[8 * i:8 * (i + 1)], 32) << (8 * i)
 
             core.RESET @= m.reset(state.O == INIT)
@@ -116,25 +118,23 @@ def test_core(test, ImmGen):
 
             chunk = m.mux(_hex, cntr)
 
-            imem.write(m.zext_to(cntr, 20), chunk, m.enable(state.O == INIT))
+            imem.WADDR @= m.zext_to(cntr, 20)
+            imem.WDATA @= chunk
+            imem.WE @= m.enable(state.O == INIT)
 
-            dmem.write(
-                m.mux([m.zext_to(cntr, 20), daddr], state.O == INIT),
-                m.mux([chunk, write], state.O == INIT),
-                m.enable(
-                    (state.O == INIT) | (core.dcache.req.valid &
-                                         core.dcache.req.data.mask.reduce_or()))
+            dmem.WADDR @= m.mux([daddr, m.zext_to(cntr, 20)], state.O == RUN)
+            dmem.WDATA @= m.mux([write, chunk], state.O == RUN)
+            dmem.WE @= m.enable(
+                (state.O == INIT) | (core.dcache.req.valid &
+                                     core.dcache.req.data.mask.reduce_or())
             )
 
-            @m.inline_combinational()
-            def logic():
-                state.I @= state.O
-                cycle.I @= cycle.O
-                if state.O == INIT:
-                    if done:
-                        state.I @= RUN
-                if state.O == RUN:
-                    cycle.I @= cycle.O + 1
+            state.I @= state.O
+            cycle.I @= cycle.O
+            with m.when(state.O == RUN):
+                cycle.I @= cycle.O + 1
+            with m.elsewhen(done):
+                state.I @= RUN
 
             debug = False
             if debug:
@@ -164,6 +164,8 @@ def test_core(test, ImmGen):
 
     tester = f.Tester(DUT, DUT.CLK)
     tester.wait_until_high(DUT.done)
-    tester.compile_and_run("verilator", magma_opts={"inline": True,
-                                                    "verilator_compat": True},
+    tester.compile_and_run("verilator", magma_output="mlir-verilog",
+                           magma_opts={"flatten_all_tuples": True,
+                                       "disallow_local_variables": True,
+                                       "check_circt_opt_version": False},
                            flags=['-Wno-unused', '-Wno-undriven', '--assert'])

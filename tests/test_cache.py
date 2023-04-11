@@ -2,7 +2,7 @@ import itertools
 import random
 from hwtypes import BitVector
 import magma as m
-import mantle
+from mantle2.counter import Counter
 import fault as f
 
 from riscv_mini.nasti import (make_NastiIO, NastiParameters,
@@ -26,10 +26,8 @@ class Queue(m.Generator2):
         ) + m.ClockIO()
 
         ram = m.Memory(entries, T)()
-        enq_ptr = mantle.CounterModM(entries, entries.bit_length(),
-                                     has_ce=True, cout=False)
-        deq_ptr = mantle.CounterModM(entries, entries.bit_length(),
-                                     has_ce=True, cout=False)
+        enq_ptr = Counter(entries, has_enable=True, has_cout=False)()
+        deq_ptr = Counter(entries, has_enable=True, has_cout=False)()
         maybe_full = m.Register(init=False, has_enable=True)()
 
         ptr_match = enq_ptr.O == deq_ptr.O
@@ -42,14 +40,14 @@ class Queue(m.Generator2):
         do_enq = self.io.enq.fired()
         do_deq = self.io.deq.fired()
 
-        ram.write(self.io.enq.data, enq_ptr.O[:-1], m.enable(do_enq))
+        ram.write(self.io.enq.data, enq_ptr.O, m.enable(do_enq))
 
         enq_ptr.CE @= m.enable(do_enq)
         deq_ptr.CE @= m.enable(do_deq)
 
         maybe_full.I @= m.enable(do_enq)
         maybe_full.CE @= m.enable(do_enq != do_deq)
-        self.io.deq.data @= ram[deq_ptr.O[:-1]]
+        self.io.deq.data @= ram[deq_ptr.O]
 
         if flow:
             raise NotImplementedError()
@@ -131,15 +129,11 @@ class GoldCache(m.Generator2):
 
         state = m.Register(init=State.IDLE)()
 
-        write_counter = mantle.CounterModM(data_beats,
-                                           max(data_beats.bit_length(), 1),
-                                           has_ce=True)
+        write_counter = Counter(data_beats, has_enable=True, has_cout=True)()
         write_counter.CE @= m.enable(state.O == State.WRITE)
         w_cnt, w_done = write_counter.O, write_counter.COUT
 
-        read_counter = mantle.CounterModM(data_beats,
-                                          max(data_beats.bit_length(), 1),
-                                          has_ce=True)
+        read_counter = Counter(data_beats, has_enable=True, has_cout=True)()
         read_counter.CE @= m.enable((state.O == State.READ) &
                                     self.io.nasti.r.valid)
         r_cnt, r_done = read_counter.O, read_counter.COUT
@@ -304,12 +298,10 @@ def test_cache():
 
         mem_state = m.Register(init=MemState.IDLE)()
 
-        write_counter = mantle.CounterModM(data_beats, data_beats.bit_length(),
-                                           has_ce=True)
+        write_counter = Counter(data_beats, has_enable=True, has_cout=True)()
         write_counter.CE @= m.enable((mem_state.O == MemState.WRITE) &
                                      dut_mem.w.valid & gold_mem.w.valid)
-        read_counter = mantle.CounterModM(data_beats, data_beats.bit_length(),
-                                          has_ce=True)
+        read_counter = Counter(data_beats, has_enable=True, has_cout=True)()
         read_counter.CE @= m.enable((mem_state.O == MemState.READ) &
                                     dut_mem.r.ready & gold_mem.r.ready)
 
@@ -484,14 +476,12 @@ def test_cache():
 
         state = m.Register(init=TestState.INIT)()
         timeout = m.Register(m.UInt[32])()
-        init_m = len(init_addr) - 1
-        init_counter = mantle.CounterModM(init_m, init_m.bit_length(),
-                                          has_ce=True)
+        init_m = len(init_addr)
+        init_counter = Counter(init_m, has_enable=True, has_cout=True)()
         init_counter.CE @= m.enable(state.O == TestState.INIT)
 
-        test_m = len(test_vec) - 1
-        test_counter = mantle.CounterModM(test_m, test_m.bit_length(),
-                                          has_ce=True)
+        test_m = len(test_vec)
+        test_counter = Counter(test_m, has_enable=True, has_cout=True)()
         test_counter.CE @= m.enable(state.O == TestState.DONE)
         curr_vec = m.mux(test_vec, test_counter.O)
         mask = (curr_vec >> (b_len + s_len + t_len + b_bits))[:x_len // 8]
@@ -521,28 +511,26 @@ def test_cache():
                 .when(m.posedge(io.CLK))\
                 .if_(state.O == TestState.INIT)
 
-        @m.inline_combinational()
-        def state_fsm():
-            timeout.I @= timeout.O
-            mem_wen1 @= m.bit(False)
-            check_resp_data @= m.bit(False)
-            state.I @= state.O
-            if state.O == TestState.INIT:
-                mem_wen1 @= m.bit(True)
-                if init_counter.COUT:
-                    state.I @= TestState.START
-            elif state.O == TestState.START:
-                if gold_req.ready:
-                    timeout.I @= m.bits(0, 32)
-                    state.I @= TestState.WAIT
-            elif state.O == TestState.WAIT:
-                timeout.I @= timeout.O + 1
-                if dut.cpu.resp.valid & gold_resp.valid:
-                    if ~mask.reduce_or():
-                        check_resp_data @= m.bit(True)
-                    state.I @= TestState.DONE
-            elif state.O == TestState.DONE:
+        timeout.I @= timeout.O
+        mem_wen1 @= m.bit(False)
+        check_resp_data @= m.bit(False)
+        state.I @= state.O
+        with m.when(state.O == TestState.INIT):
+            mem_wen1 @= m.bit(True)
+            with m.when(init_counter.COUT):
                 state.I @= TestState.START
+        with m.elsewhen(state.O == TestState.START):
+            with m.when(gold_req.ready):
+                timeout.I @= m.bits(0, 32)
+                state.I @= TestState.WAIT
+        with m.elsewhen(state.O == TestState.WAIT):
+            timeout.I @= timeout.O + 1
+            with m.when(dut.cpu.resp.valid & gold_resp.valid):
+                with m.when(~mask.reduce_or()):
+                    check_resp_data @= m.bit(True)
+                state.I @= TestState.DONE
+        with m.elsewhen(state.O == TestState.DONE):
+            state.I @= TestState.START
 
         f.assert_immediate((state.O != TestState.WAIT) | (timeout.O < 100))
         f.assert_immediate(~check_resp_data | (dut.cpu.resp.data.data ==
@@ -563,7 +551,12 @@ def test_cache():
 
     tester = f.Tester(DUT, DUT.CLK)
     tester.wait_until_high(DUT.done)
-    tester.compile_and_run("verilator", magma_opts={"inline": True,
-                                                    "verilator_compat": True},
-                           flags=['-Wno-unused', '--assert'],
-                           disp_type="realtime")
+    tester.compile_and_run("verilator",
+                           magma_opts={
+                               "flatten_all_tuples": True,
+                               "disallow_local_variables": True,
+                               "check_circt_opt_version": False
+                           },
+                           flags=['-Wno-unused', '--assert', '-Wno-width'],
+                           disp_type="realtime",
+                           magma_output="mlir-verilog")

@@ -86,33 +86,31 @@ class MemArbiter(m.Generator2):
                                   (self.io.dcache.r.ready &
                                    (state.O == State.DCACHE_READ)))
 
-        @m.inline_combinational()
-        def logic():
-            state.I @= state.O
-            if state.O == State.IDLE:
-                if (self.io.dcache.aw.valid &
+        state.I @= state.O
+        with m.when(state.O == State.IDLE):
+            with m.when(self.io.dcache.aw.valid &
                         self.io.dcache.aw.ready.value()):
-                    state.I @= State.DCACHE_WRITE
-                elif (self.io.dcache.ar.valid &
-                      self.io.dcache.ar.ready.value()):
-                    state.I @= State.DCACHE_READ
-                elif (self.io.icache.ar.valid &
-                      self.io.icache.ar.ready.value()):
-                    state.I @= State.ICACHE_READ
-            elif state.O == State.ICACHE_READ:
-                if self.io.nasti.r.fired() & self.io.nasti.r.data.last:
-                    state.I @= State.IDLE
-            elif state.O == State.DCACHE_READ:
-                if self.io.nasti.r.fired() & self.io.nasti.r.data.last:
-                    state.I @= State.IDLE
-            elif state.O == State.DCACHE_WRITE:
-                if (self.io.dcache.w.valid &
+                state.I @= State.DCACHE_WRITE
+            with m.elsewhen(self.io.dcache.ar.valid &
+                            self.io.dcache.ar.ready.value()):
+                state.I @= State.DCACHE_READ
+            with m.elsewhen(self.io.icache.ar.valid &
+                            self.io.icache.ar.ready.value()):
+                state.I @= State.ICACHE_READ
+        with m.elsewhen(state.O == State.ICACHE_READ):
+            with m.when(self.io.nasti.r.fired() & self.io.nasti.r.data.last):
+                state.I @= State.IDLE
+        with m.elsewhen(state.O == State.DCACHE_READ):
+            with m.when(self.io.nasti.r.fired() & self.io.nasti.r.data.last):
+                state.I @= State.IDLE
+        with m.elsewhen(state.O == State.DCACHE_WRITE):
+            with m.when(self.io.dcache.w.valid &
                         self.io.dcache.w.ready.value() &
                         self.io.dcache.w.data.last):
-                    state.I @= State.DCACHE_ACK
-            elif state.O == State.DCACHE_ACK:
-                if self.io.nasti.b.fired():
-                    state.I @= State.IDLE
+                state.I @= State.DCACHE_ACK
+        with m.elsewhen(state.O == State.DCACHE_ACK):
+            with m.when(self.io.nasti.b.fired()):
+                state.I @= State.IDLE
 
 
 class Tile(m.Generator2):

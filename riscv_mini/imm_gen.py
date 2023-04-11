@@ -62,17 +62,22 @@ class ImmGenMux(ImmGen):
             )
         )
 
+        is_s_or_b = m.Bit(name="is_s_or_b")
+        is_s_or_b @= (is_s | is_b)
+
         b1_5 = is_u.ite(
             0,
-            (is_s | is_b).ite(
+            is_s_or_b.ite(
                 inst[8:12],
                 is_z.ite(inst[16:20], inst[21:25])
             )
         )
 
-        b5_11 = (is_u | is_z).ite(0, inst[25:31])
+        is_u_or_z = m.Bit(name="is_u_or_z")
+        is_u_or_z @= is_u | is_z
+        b5_11 = is_u_or_z.ite(0, inst[25:31])
 
-        b11_12 = (is_u | is_z).ite(
+        b11_12 = is_u_or_z.ite(
             0,
             is_j.ite(
                 inst[20:21],
@@ -81,7 +86,9 @@ class ImmGenMux(ImmGen):
         )
 
         # the reference impl inverts this mux with (!is_u & !is_j)
-        b12_20 = (is_u | is_j).ite(inst[12:20], sign.repeat(8))
+        is_u_or_j = m.Bit(name="is_u_or_j")
+        is_u_or_j @= is_u | is_j
+        b12_20 = (is_u_or_j).ite(inst[12:20], sign.repeat(8))
 
         b20_31 = is_u.ite(inst[20:31], sign.repeat(11))
 

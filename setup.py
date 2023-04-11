@@ -18,6 +18,7 @@ setup(
     install_requires=[
         "magma-lang>=2.1.19",
         "mantle",
+        "mantle2",
         "fault"
     ],
     license='BSD License',

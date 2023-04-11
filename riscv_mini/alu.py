@@ -29,34 +29,32 @@ class ALUSimple(ALUBase):
         super().__init__(x_len)
         io = self.io
 
-        @m.inline_combinational()
-        def alu():
-            if io.op == ALUOP.ADD:
-                io.O @= io.A + io.B
-            elif io.op == ALUOP.SUB:
-                io.O @= io.A - io.B
-            elif io.op == ALUOP.SRA:
-                io.O @= m.uint(m.sint(io.A) >> m.sint(io.B))
-            elif io.op == ALUOP.SRL:
-                io.O @= io.A >> io.B
-            elif io.op == ALUOP.SLL:
-                io.O @= io.A << io.B
-            elif io.op == ALUOP.SLT:
-                io.O @= m.uint(m.sint(io.A) < m.sint(io.B), x_len)
-            elif io.op == ALUOP.SLTU:
-                io.O @= m.uint(io.A < io.B, x_len)
-            elif io.op == ALUOP.AND:
-                io.O @= io.A & io.B
-            elif io.op == ALUOP.OR:
-                io.O @= io.A | io.B
-            elif io.op == ALUOP.XOR:
-                io.O @= io.A ^ io.B
-            elif io.op == ALUOP.COPY_A:
-                io.O @= io.A
-            else:
-                io.O @= io.B
+        with m.when(io.op == ALUOP.ADD):
+            io.O @= io.A + io.B
+        with m.elsewhen(io.op == ALUOP.SUB):
+            io.O @= io.A - io.B
+        with m.elsewhen(io.op == ALUOP.SRA):
+            io.O @= m.uint(m.sint(io.A) >> m.sint(io.B))
+        with m.elsewhen(io.op == ALUOP.SRL):
+            io.O @= io.A >> io.B
+        with m.elsewhen(io.op == ALUOP.SLL):
+            io.O @= io.A << io.B
+        with m.elsewhen(io.op == ALUOP.SLT):
+            io.O @= m.uint(m.sint(io.A) < m.sint(io.B), x_len)
+        with m.elsewhen(io.op == ALUOP.SLTU):
+            io.O @= m.uint(io.A < io.B, x_len)
+        with m.elsewhen(io.op == ALUOP.AND):
+            io.O @= io.A & io.B
+        with m.elsewhen(io.op == ALUOP.OR):
+            io.O @= io.A | io.B
+        with m.elsewhen(io.op == ALUOP.XOR):
+            io.O @= io.A ^ io.B
+        with m.elsewhen(io.op == ALUOP.COPY_A):
+            io.O @= io.A
+        with m.otherwise():
+            io.O @= io.B
 
-            io.sum_ @= io.A + m.mux([io.B, -io.B], io.op[0])
+        io.sum_ @= io.A + m.mux([io.B, -io.B], io.op[0])
 
 
 class ALUArea(ALUBase):
@@ -72,24 +70,22 @@ class ALUArea(ALUBase):
         ) >> m.sint(m.zext(io.B, 1)))[:x_len]
         shiftl = shiftr[::-1]
 
-        @m.inline_combinational()
-        def alu():
-            if (io.op == ALUOP.ADD) | (io.op == ALUOP.SUB):
-                io.O @= sum_
-            elif (io.op == ALUOP.SLT) | (io.op == ALUOP.SLTU):
-                io.O @= cmp
-            elif (io.op == ALUOP.SRA) | (io.op == ALUOP.SRL):
-                io.O @= shiftr
-            elif io.op == ALUOP.SLL:
-                io.O @= shiftl
-            elif io.op == ALUOP.AND:
-                io.O @= io.A & io.B
-            elif io.op == ALUOP.OR:
-                io.O @= io.A | io.B
-            elif io.op == ALUOP.XOR:
-                io.O @= io.A ^ io.B
-            elif io.op == ALUOP.COPY_A:
-                io.O @= io.A
-            else:
-                io.O @= io.B
+        with m.when((io.op == ALUOP.ADD) | (io.op == ALUOP.SUB)):
+            io.O @= sum_
+        with m.elsewhen((io.op == ALUOP.SLT) | (io.op == ALUOP.SLTU)):
+            io.O @= cmp
+        with m.elsewhen((io.op == ALUOP.SRA) | (io.op == ALUOP.SRL)):
+            io.O @= shiftr
+        with m.elsewhen(io.op == ALUOP.SLL):
+            io.O @= shiftl
+        with m.elsewhen(io.op == ALUOP.AND):
+            io.O @= io.A & io.B
+        with m.elsewhen(io.op == ALUOP.OR):
+            io.O @= io.A | io.B
+        with m.elsewhen(io.op == ALUOP.XOR):
+            io.O @= io.A ^ io.B
+        with m.elsewhen(io.op == ALUOP.COPY_A):
+            io.O @= io.A
+        with m.otherwise():
+            io.O @= io.B
         io.sum_ @= sum_

@@ -1,3 +1,5 @@
+import tempfile
+
 import fault
 import magma as m
 # m.config.set_debug_mode(True)
@@ -11,7 +13,7 @@ import riscv_mini.instructions as Instructions
 from hwtypes import BitVector as BV
 
 from .utils import (I, rand_fn3, rand_rs1, rand_rs2, SYS, J, L, rand_rd, JR,
-                    rand_inst, csr, rs1, nop)
+                    rand_inst, csr as csr_util, rs1, nop)
 from .opcode import Funct3
 
 
@@ -21,7 +23,10 @@ def update_when(reg, value, cond):
         reg.I.unwire(default)
     else:
         default = reg.O
-    reg.I @= m.mux([default, value], cond)
+    # Temp hack for verilator width inference issue
+    _cond = m.Bit(name=f"cond_{id(cond)}")
+    _cond @= cond
+    reg.I @= m.mux([default, value], _cond)
 
 
 def incr_when(reg, cond):
@@ -123,7 +128,7 @@ def test_csr():
         csr.host.fromhost.data @= 0
 
         # values known statically
-        _csr_addr = [csr(inst) for inst in insts]
+        _csr_addr = [csr_util(inst) for inst in insts]
         _rs1_addr = [rs1(inst) for inst in insts]
         _csr_ro = [((((x >> 11) & 0x1) > 0x0) & (((x >> 10) & 0x1) > 0x0)) |
                    (x == CSR.mtvec) | (x == CSR.mtdeleg) for x in _csr_addr]
@@ -374,6 +379,13 @@ def test_csr():
     if_.circuit.epc.expect(tester.peek(CSR_DUT.expected_epc))
     if_.circuit.evec.expect(tester.peek(CSR_DUT.expected_evec))
     if_.circuit.expt.expect(tester.peek(CSR_DUT.expected_expt))
-    tester.compile_and_run("verilator", magma_opts={"verilator_compat": True,
-                                                    "inline": True,
-                                                    "terminate_unused": True})
+    with tempfile.TemporaryDirectory() as tempdir:
+        tester.compile_and_run("verilator",
+                               magma_opts={"disallow_local_variables": True,
+                                           "flatten_all_tuples": True,
+                                           "terminate_unused": True,
+                                           "check_circt_opt_version": False},
+                               magma_output="mlir-verilog",
+                               flags=['-Wno-unused'],
+                               directory=tempdir
+                               )

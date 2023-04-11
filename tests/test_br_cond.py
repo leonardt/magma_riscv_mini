@@ -1,7 +1,7 @@
 import pytest
 
 import magma as m
-from mantle import CounterModM
+from mantle2.counter import Counter
 import fault
 from hwtypes import BitVector as BV
 
@@ -40,7 +40,7 @@ def test_br_cond(BrCond):
         ] * 10
 
         n = len(insts)
-        counter = CounterModM(n, n.bit_length())
+        counter = Counter(n, has_cout=True)()
         control.inst @= m.mux(insts, counter.O)
         io.done @= counter.COUT
 
@@ -56,26 +56,28 @@ def test_br_cond(BrCond):
         ltu = [a < b for a, b in zip(rs1, rs2)]
         geu = [a >= b for a, b in zip(rs1, rs2)]
 
-        @m.inline_combinational()
-        def logic():
-            if control.br_type == BR_EQ:
-                io.out @= m.mux(eq, counter.O)
-            elif control.br_type == BR_NE:
-                io.out @= m.mux(ne, counter.O)
-            elif control.br_type == BR_LT:
-                io.out @= m.mux(lt, counter.O)
-            elif control.br_type == BR_GE:
-                io.out @= m.mux(ge, counter.O)
-            elif control.br_type == BR_LTU:
-                io.out @= m.mux(ltu, counter.O)
-            elif control.br_type == BR_GEU:
-                io.out @= m.mux(geu, counter.O)
-            else:
-                io.out @= False
+        with m.when(control.br_type == BR_EQ):
+            io.out @= m.mux(eq, counter.O)
+        with m.elsewhen(control.br_type == BR_NE):
+            io.out @= m.mux(ne, counter.O)
+        with m.elsewhen(control.br_type == BR_LT):
+            io.out @= m.mux(lt, counter.O)
+        with m.elsewhen(control.br_type == BR_GE):
+            io.out @= m.mux(ge, counter.O)
+        with m.elsewhen(control.br_type == BR_LTU):
+            io.out @= m.mux(ltu, counter.O)
+        with m.elsewhen(control.br_type == BR_GEU):
+            io.out @= m.mux(geu, counter.O)
+        with m.otherwise():
+            io.out @= False
 
     tester = fault.Tester(BrCond_DUT, BrCond_DUT.CLK)
     tester.wait_until_high(tester.circuit.done)
     tester.assert_(tester.circuit.taken == tester.circuit.out)
-    tester.compile_and_run("verilator", magma_opts={"verilator_compat": True,
-                                                    "inline": True,
-                                                    "terminate_unused": True})
+    tester.compile_and_run("verilator",
+                           magma_opts={"terminate_unused": True,
+                                       "flatten_all_tuples": True,
+                                       "disallow_local_variables": True,
+                                       "check_circt_opt_version": False},
+                           magma_output="mlir-verilog",
+                           flags=["-Wno-UNUSED"])

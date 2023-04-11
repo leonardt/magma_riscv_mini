@@ -1,6 +1,8 @@
+import tempfile
+
 import fault as f
 import magma as m
-import mantle
+from mantle2.counter import Counter
 import pytest
 
 from riscv_mini.control import (Control, IMM_I, IMM_S, IMM_B, IMM_U, IMM_J,
@@ -17,7 +19,7 @@ def test_imm_gen_wire(ImmGen):
         imm = ImmGen(32)()
         ctrl = Control(32)()
 
-        counter = mantle.CounterModM(len(insts), len(insts).bit_length())
+        counter = Counter(len(insts), has_cout=True)()
         i = m.mux([iimm(i) for i in insts], counter.O)
         s = m.mux([simm(i) for i in insts], counter.O)
         b = m.mux([bimm(i) for i in insts], counter.O)
@@ -59,8 +61,13 @@ def test_imm_gen_wire(ImmGen):
 
     tester = f.Tester(DUT, DUT.CLK)
     tester.wait_until_high(DUT.done)
-    tester.compile_and_run("verilator", magma_opts={"verilator_compat": True,
-                                                    "inline": True,
-                                                    "terminate_unused": True},
-                           flags=['--assert'],
-                           disp_type="realtime")
+    with tempfile.TemporaryDirectory() as tempdir:
+        tester.compile_and_run("verilator",
+                               magma_opts={"flatten_all_tuples": True,
+                                           "disallow_local_variables": True,
+                                           "terminate_unused": True,
+                                           "check_circt_opt_version": False},
+                               magma_output="mlir-verilog",
+                               flags=['--assert', "-Wno-unused"],
+                               disp_type="realtime",
+                               directory=tempdir)
