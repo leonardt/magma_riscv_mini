@@ -1,3 +1,6 @@
+# DEPRECATED
+This repo has been deprecated, the most up to date version of this example now lives [in the main magma repo](https://github.com/phanrahan/magma/tree/master/examples/riscv_mini)
+
 # magma_riscv_mini
 [![Linux Test](https://github.com/leonardt/magma_riscv_mini/workflows/Linux%20Test/badge.svg)](https://github.com/leonardt/magma_riscv_mini/actions/workflows/linux-test.yml)
 
